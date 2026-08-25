@@ -33,6 +33,24 @@ try {
   await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] }, sessionId);
   await call('Page.navigate', { url: 'http://localhost:4173' }, sessionId);
   await new Promise((resolve) => setTimeout(resolve, 1200));
+  async function inspectHover(selector) {
+    const { result: { value: center } } = await call('Runtime.evaluate', {
+      expression: `(() => { const rect = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`,
+      returnByValue: true,
+    }, sessionId);
+    await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: center.x, y: center.y }, sessionId);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const { result: { value: styles } } = await call('Runtime.evaluate', {
+      expression: `(() => { const style = getComputedStyle(document.querySelector(${JSON.stringify(selector)})); return { backgroundColor: style.backgroundColor, borderColor: style.borderTopColor, outlineStyle: style.outlineStyle }; })()`,
+      returnByValue: true,
+    }, sessionId);
+    return styles;
+  }
+  const themeHoverStyles = await inspectHover('#theme-toggle');
+  const githubHoverStyles = await inspectHover('.github-link');
+  const shortcutHoverScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/shortcut-hover.png', Buffer.from(shortcutHoverScreenshot.data, 'base64'));
+  await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 100 }, sessionId);
   const expression = `(async () => {
     const set = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
     let initialBackupBlob;
@@ -147,6 +165,8 @@ try {
     const githubBounds = document.querySelector('.github-link').getBoundingClientRect();
     return {
       did,
+      themeHoverStyles: ${JSON.stringify(themeHoverStyles)},
+      githubHoverStyles: ${JSON.stringify(githubHoverStyles)},
       themeTogglePresent: Boolean(themeToggle),
       themeToggleVisibleText: themeToggle?.textContent.trim() ?? '',
       themeToggleHasIcon: Boolean(themeToggle?.querySelector('svg')),
@@ -317,8 +337,10 @@ npm run serve`;
   const downloadIsolationPassed = value.initialBackupName.startsWith('technocore-identity-') && value.initialBackupName.endsWith('.json') && value.initialBackupFormat === 'technocore-did-studio';
   const themePassed = value.themeTogglePresent && value.themeToggleVisibleText === '' && value.themeToggleHasIcon && value.themeToggleLabel === 'Switch to light mode' && value.initialTheme === 'light' && value.themeAfterToggle === 'dark' && value.savedTheme === 'dark' && value.lightPaper !== value.darkPaper && value.themeBesideGithub;
   const serveTypographyPassed = value.serveNoteFontSize === '14px' && value.serveNoteLineHeight === '23.1px' && value.serveNoteFontFamily === value.bodyFontFamily && value.serveLinkFontFamily === value.bodyFontFamily && value.serveCodeFontFamily === value.bodyFontFamily;
+  const transparentHover = (styles) => styles.backgroundColor === 'rgba(0, 0, 0, 0)' && styles.borderColor === 'rgba(0, 0, 0, 0)' && styles.outlineStyle === 'none';
+  const shortcutHoverPassed = transparentHover(value.themeHoverStyles) && transparentHover(value.githubHoverStyles);
   console.log(JSON.stringify(value, null, 2));
-  if (!passed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed) process.exitCode = 1;
+  if (!passed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed || !shortcutHoverPassed) process.exitCode = 1;
 } finally {
   ws.close();
   const exited = new Promise((resolve) => child.once('exit', resolve));
