@@ -1,0 +1,162 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const chrome = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const profile = await mkdtemp(join(tmpdir(), 'technocore-e2e-'));
+const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank']);
+let socketUrl;
+for await (const chunk of child.stderr) {
+  const match = chunk.toString().match(/DevTools listening on (ws:\/\/[^\s]+)/u);
+  if (match) { socketUrl = match[1]; break; }
+}
+if (!socketUrl) throw new Error('Chrome did not expose a DevTools socket.');
+const ws = new WebSocket(socketUrl);
+await new Promise((resolve, reject) => { ws.addEventListener('open', resolve, { once: true }); ws.addEventListener('error', reject, { once: true }); });
+let id = 0;
+const pending = new Map();
+ws.addEventListener('message', (event) => {
+  const message = JSON.parse(event.data);
+  if (message.id && pending.has(message.id)) { pending.get(message.id)(message); pending.delete(message.id); }
+});
+function call(method, params = {}, sessionId) {
+  const callId = ++id;
+  ws.send(JSON.stringify({ id: callId, method, params, ...(sessionId ? { sessionId } : {}) }));
+  return new Promise((resolve, reject) => pending.set(callId, (message) => message.error ? reject(new Error(message.error.message)) : resolve(message.result)));
+}
+try {
+  const { targetId } = await call('Target.createTarget', { url: 'about:blank' });
+  const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
+  await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false }, sessionId);
+  await call('Page.enable', {}, sessionId);
+  await call('Page.navigate', { url: 'http://localhost:4173' }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 1200));
+  const expression = `(async () => {
+    const set = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    set('#new-passphrase', 'correct horse battery staple');
+    set('#confirm-passphrase', 'correct horse battery staple');
+    document.querySelector('#safety-check').checked = true;
+    document.querySelector('#generate-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 1300));
+    const did = document.querySelector('#did-value').textContent;
+    const initialRecordCount = document.querySelector('#record-count').textContent;
+    set('#message', ' hello\\nworld ');
+    set('#nonce', '1720000000000');
+    document.querySelector('#sign-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const signedOnly = {
+      resultVisible: !document.querySelector('#signed-result').hidden,
+      canonical: document.querySelector('#canonical').textContent,
+      signatureLength: document.querySelector('#signature').textContent.length,
+      requestStartsCorrectly: document.querySelector('#request-url').value.startsWith('https://technocore.chat/r/lobby/say-signed/did:key:z6Mk'),
+    };
+    window.fetch = async (_url, options = {}) => {
+      if (String(_url).includes('/api/feed')) {
+        return new Response(JSON.stringify({
+          updatedAt: '2026-08-25T09:02:00Z',
+          messages: [
+            { room: 'technocore', kind: 'contribution', seq: 84, timestamp: '2026-08-25T09:01:00Z', from: did, text: 'Contribution: <a href="https://unsafe.example">inert link text</a>', nonce: '1720000000002' },
+            { room: 'lobby', kind: 'introduction', seq: 42, timestamp: '2026-08-25T09:00:00Z', from: did, text: 'published hello', nonce: '1720000000001' },
+          ],
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      const sent = JSON.parse(options.body);
+      const seq = sent.room === 'lobby' ? 42 : 84;
+      return new Response(JSON.stringify({ room: sent.room, seq, timestamp: '2026-08-25T08:00:00Z', did, nonce: sent.nonce, text: sent.text }), { status: 200, headers: { 'content-type': 'application/json' } });
+    };
+    set('#introduction-text', 'I build small public tools.');
+    document.querySelector('#introduction-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const preparedIntroductionRoom = document.querySelector('#room').value;
+    const preparedIntroductionMessage = document.querySelector('#message').value;
+    set('#nonce', '1720000000001');
+    document.querySelector('#publish-check').checked = true;
+    document.querySelector('#sign-form').requestSubmit(document.querySelector('#sign-publish-button'));
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const lobbyRecord = document.querySelector('#record-lobby').textContent;
+    const codeOption = document.querySelector('input[name="contribution-format"][value="code"]');
+    codeOption.checked = true;
+    set('#contribution-url', 'https://example.com/work');
+    document.querySelector('#contribution-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const preparedRoom = document.querySelector('#room').value;
+    const preparedMessage = document.querySelector('#message').value;
+    document.querySelector('#publish-check').checked = true;
+    set('#nonce', '1720000000002');
+    document.querySelector('#sign-form').requestSubmit(document.querySelector('#sign-publish-button'));
+    await new Promise(resolve => setTimeout(resolve, 800));
+    document.querySelector('#refresh-feed').click();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    document.querySelector('[data-feed-filter="contribution"]').click();
+    const downloads = [];
+    const originalAnchorClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () { downloads.push(this.download); };
+    document.querySelector('#download-evidence-backup-2').click();
+    document.querySelector('#download-record-sheet-2').click();
+    HTMLAnchorElement.prototype.click = originalAnchorClick;
+    return {
+      did,
+      initialRecordCount,
+      identityReady: !document.querySelector('#identity-ready').hidden,
+      signEnabled: !document.querySelector('#sign-fieldset').disabled,
+      ...signedOnly,
+      publicationVisible: !document.querySelector('#publication-result').hidden,
+      preparedIntroductionRoom,
+      preparedIntroductionMessage,
+      introductionFilterLabel: document.querySelector('[data-feed-filter="introduction"]').textContent,
+      contributionFilterLabel: document.querySelector('[data-feed-filter="contribution"]').textContent,
+      lobbyRecord,
+      preparedRoom,
+      preparedMessage,
+      contributionPlaceholder: document.querySelector('#contribution-url').getAttribute('placeholder'),
+      checklistPresent: Boolean(document.querySelector('.contribution-checks')),
+      recordCount: document.querySelector('#record-count').textContent,
+      contribution: document.querySelector('#record-contribution').textContent,
+      backupLobbySequence: document.querySelector('#backup-lobby-seq').textContent,
+      backupTechnocoreSequence: document.querySelector('#backup-technocore-seq').textContent,
+      downloads,
+      technocoreRecord: document.querySelector('#record-technocore').textContent,
+      publishedRoom: document.querySelector('#published-room').textContent,
+      publishedSequence: document.querySelector('#published-seq').textContent,
+      publishedNonce: document.querySelector('#published-nonce').textContent,
+      feedStatus: document.querySelector('#feed-status').textContent,
+      feedItems: document.querySelectorAll('#feed-list .feed-item').length,
+      feedText: document.querySelector('#feed-list').textContent,
+      feedLinks: document.querySelectorAll('#feed-list a').length,
+      contributionFilterPressed: document.querySelector('[data-feed-filter="contribution"]').getAttribute('aria-pressed'),
+      status: document.querySelector('#status').textContent,
+    };
+  })()`;
+  const result = await call('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, sessionId);
+  const value = result.result.value;
+  await call('Runtime.evaluate', { expression: "document.querySelector('#identity').scrollIntoView({block:'start'})" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const screenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/record-board.png', Buffer.from(screenshot.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('#introduction').scrollIntoView({block:'start'})" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const introductionScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/introduction.png', Buffer.from(introductionScreenshot.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('#contribution').scrollIntoView({block:'start'})" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const contributionScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/contribution.png', Buffer.from(contributionScreenshot.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.querySelector('#prepare-contribution').scrollIntoView({block:'center'})" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const contributionBottomScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/contribution-bottom.png', Buffer.from(contributionBottomScreenshot.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('#live').scrollIntoView({block:'start'})" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const feedScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/live-feed.png', Buffer.from(feedScreenshot.data, 'base64'));
+  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.signEnabled && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true';
+  console.log(JSON.stringify(value, null, 2));
+  if (!passed) process.exitCode = 1;
+} finally {
+  ws.close();
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill();
+  await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 3000))]);
+  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+}

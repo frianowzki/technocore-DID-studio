@@ -1,0 +1,18 @@
+{
+  "name": "technocore-did-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "test:e2e": "node scripts/e2e.mjs",
+    "build": "node scripts/build.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@noble/ed25519": "2.3.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.9"
+  }
+}

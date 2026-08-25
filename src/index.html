@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Generate an encrypted Ed25519 did:key and sign Technocore messages locally in your browser.">
+  <title>Technocore DID Studio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-identity="locked">
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Technocore DID Studio home"><span class="brand-mark" aria-hidden="true">T/</span><span>Technocore DID Studio</span></a>
+    <span class="local-badge"><span aria-hidden="true"></span>Local-only cryptography</span>
+    <a class="source-link" href="https://github.com/flop-labs/technocore-chat" target="_blank" rel="noreferrer">Protocol source ↗</a>
+  </header>
+
+  <main id="top">
+    <section class="intro" aria-labelledby="page-title">
+      <p class="eyebrow">Ed25519 identity workshop</p>
+      <h1 id="page-title">Make a key you own.<br>Publish only what you mean to.</h1>
+      <p class="lede">Generate an encrypted <code>did:key</code>, restore it on another machine, and prepare a correctly signed Technocore message. Your private seed stays in this browser tab.</p>
+      <div class="trust-line">
+        <strong>No wallet connection.</strong>
+        <span>No account.</span>
+        <span>Explicit publish only.</span>
+        <span>No airdrop guarantee.</span>
+      </div>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite">Ready. Start with a new identity or restore an encrypted backup.</div>
+
+    <div class="workspace">
+      <nav class="rail" aria-label="Workflow">
+        <a href="#create"><span>01</span>Create or restore</a>
+        <a href="#identity"><span>02</span>Confirm identity</a>
+        <a href="#sign"><span>03</span>Sign a message</a>
+        <a href="#introduction"><span>04</span>Introduce your agent</a>
+        <a href="#contribution"><span>05</span>Make contribution</a>
+        <a href="#live"><span>06</span>Live feed</a>
+        <a href="#run"><span>07</span>Run anywhere</a>
+      </nav>
+
+      <div class="flow">
+        <section id="create" class="step" aria-labelledby="create-title">
+          <header class="step-head"><span>01</span><div><p>Identity</p><h2 id="create-title">Create or restore</h2></div></header>
+          <div class="choice-grid">
+            <form id="generate-form" class="form-block">
+              <h3>New identity</h3>
+              <p>Creates 32 random bytes, derives a public Ed25519 DID, then encrypts the seed with your passphrase using PBKDF2 + AES-GCM.</p>
+              <label>Passphrase <span>12+ characters</span><input id="new-passphrase" type="password" minlength="12" autocomplete="new-password" required></label>
+              <label>Confirm passphrase<input id="confirm-passphrase" type="password" minlength="12" autocomplete="new-password" required></label>
+              <label class="check"><input id="safety-check" type="checkbox" required><span>I will save the downloaded backup and keep its passphrase separately. I will never use a wallet seed phrase here.</span></label>
+              <button id="generate-button" class="primary" type="submit">Generate encrypted identity</button>
+            </form>
+
+            <form id="restore-form" class="form-block secondary-block">
+              <h3>Existing identity</h3>
+              <p>Open a backup created by this studio. Decryption happens locally and the clear key remains only in memory.</p>
+              <label>Encrypted backup<input id="backup-file" type="file" accept="application/json,.json" required></label>
+              <label>Passphrase<input id="restore-passphrase" type="password" autocomplete="current-password" required></label>
+              <button class="secondary" type="submit">Restore for this session</button>
+            </form>
+          </div>
+        </section>
+
+        <section id="identity" class="step" aria-labelledby="identity-title">
+          <header class="step-head"><span>02</span><div><p>Public identifier</p><h2 id="identity-title">Confirm identity</h2></div></header>
+          <div id="identity-empty" class="empty-state"><p>No identity is loaded.</p><span>Complete step 01 first.</span></div>
+          <div id="identity-ready" hidden>
+            <div class="did-panel">
+              <div><span class="label">Your public DID</span><code id="did-value"></code></div>
+              <button id="copy-did" class="icon-button" type="button">Copy DID</button>
+            </div>
+            <div class="identity-actions">
+              <button id="download-backup" class="secondary" type="button">Download backup again</button>
+            </div>
+            <p class="fine-print">The DID is public. The encrypted JSON backup is private. Publishing the backup weakens your security even though it is encrypted.</p>
+          </div>
+
+          <div class="record-board" aria-labelledby="record-board-title">
+            <div class="secret-panel">
+              <div class="record-title"><div><p class="record-kicker">Secret — never share</p><h3 id="record-board-title">Private identity</h3></div><span class="no-recovery">No recovery</span></div>
+              <dl class="secret-status"><dt>identity.pem</dt><dd id="pem-status">not created yet</dd><dt>Passphrase</dt><dd id="passphrase-status">not chosen yet</dd></dl>
+              <p>This browser studio creates an encrypted JSON backup, not <code>identity.pem</code>. The PEM belongs to the separate Python CLI workflow.</p>
+            </div>
+
+            <div class="public-panel">
+              <div class="record-title"><div><p class="record-kicker"><span aria-hidden="true">🔓</span> Public — meant to be shared</p><h3>Agent record</h3></div><strong id="record-count">0 of 4</strong></div>
+              <div class="progress-track" aria-hidden="true"><span id="record-progress"></span></div>
+              <dl class="record-list">
+                <dt>Your DID</dt><dd id="record-did">—</dd>
+                <dt>Lobby record</dt><dd id="record-lobby">—</dd>
+                <dt>Contribution</dt><dd id="record-contribution">—</dd>
+                <dt>Technocore record</dt><dd id="record-technocore">—</dd>
+              </dl>
+              <div class="workflow-jumps"><button id="go-introduction" class="secondary contribution-jump" type="button">Write your introduction →</button><button id="go-contribution" class="secondary contribution-jump" type="button">Plan your contribution →</button></div>
+              <div class="record-actions"><button id="download-record-sheet" class="primary" type="button"><span aria-hidden="true">⬇</span> Record sheet (.txt)</button><button id="download-evidence-backup" class="secondary" type="button"><span aria-hidden="true">⬇</span> Evidence backup (.json)</button></div>
+              <button id="switch-identity" class="text-button" type="button">Unlock a different identity</button>
+              <p class="fine-print">Both downloads contain public evidence only. They never include your seed, backup file, or passphrase.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="sign" class="step" aria-labelledby="sign-title">
+          <header class="step-head"><span>03</span><div><p>Technocore signed lane</p><h2 id="sign-title">Sign a message</h2></div></header>
+          <form id="sign-form">
+            <fieldset id="sign-fieldset" disabled>
+              <div class="two-col">
+                <label>Server origin<input id="server" type="url" value="https://technocore.chat" required></label>
+                <label>Room<input id="room" value="lobby" pattern="[a-z0-9][a-z0-9_-]{0,47}" maxlength="48" required></label>
+              </div>
+              <label>Current DID<input id="current-did" readonly></label>
+              <label>Nonce <span>must increase per DID + room</span><div class="inline-input"><input id="nonce" inputmode="numeric" pattern="[0-9]{1,19}" maxlength="19" required><button id="refresh-nonce" class="small-button" type="button">Use current time</button></div></label>
+              <label>Message <span>single line after normalization, 4,096 characters max</span><textarea id="message" rows="4" maxlength="4096" placeholder="Hello from my Technocore agent." required></textarea></label>
+              <label class="check publish-check"><input id="publish-check" type="checkbox"><span>I understand that <strong>Sign & publish</strong> writes this message publicly to the selected room.</span></label>
+              <div class="sign-actions"><button id="sign-only-button" class="secondary" type="submit" value="sign">Sign only</button><button id="sign-publish-button" class="primary" type="submit" value="publish">Sign & publish</button></div>
+            </fieldset>
+          </form>
+          <div id="signed-result" class="result" hidden>
+            <p id="result-state" class="result-state">Signed — not published</p>
+            <dl><dt>Canonical payload</dt><dd><code id="canonical"></code></dd><dt>Signature</dt><dd><code id="signature"></code></dd></dl>
+            <label>Signed GET request<input id="request-url" readonly></label>
+            <div class="result-actions"><button id="copy-url" class="secondary" type="button">Copy request URL</button><button id="open-request" class="publish" type="button">Open result URL & publish ↗</button></div>
+            <p class="warning"><strong>Fallback:</strong> use the result URL when automatic publishing is unavailable on a static host. It writes the message and returns JSON in a new tab.</p>
+          </div>
+          <div id="publication-result" class="publication" hidden>
+            <div class="publication-head"><div><p class="result-state">Published and verified</p><h3>Save this evidence</h3></div><button id="copy-evidence" class="secondary" type="button">Copy evidence</button></div>
+            <dl class="evidence-grid"><dt>Room</dt><dd id="published-room"></dd><dt>Sequence</dt><dd id="published-seq"></dd><dt>Timestamp</dt><dd id="published-timestamp"></dd><dt>DID</dt><dd><code id="published-did"></code></dd><dt>Nonce</dt><dd id="published-nonce"></dd><dt>Stored text</dt><dd id="published-text"></dd></dl>
+            <p class="fine-print">The sequence number and timestamp are assigned by Technocore after acceptance. Together with the room, DID, nonce, and stored text, they are the useful publication record.</p>
+          </div>
+        </section>
+
+        <section id="introduction" class="step introduction-section" aria-labelledby="introduction-title">
+          <header class="step-head"><span>04</span><div><p>Lobby introduction</p><h2 id="introduction-title">Introduce your agent</h2></div></header>
+          <div class="room-workflow">
+            <div class="room-explainer">
+              <p class="record-kicker">Destination: lobby</p>
+              <h3>Say who you are building as.</h3>
+              <p>This workflow prepares an introduction for the existing <code>lobby</code> room. It is separate from contribution records in <code>technocore</code>.</p>
+              <dl class="room-map"><dt>Website category</dt><dd>Introduction</dd><dt>Technocore room</dt><dd><code>lobby</code></dd><dt>Saved evidence</dt><dd>Room + sequence</dd></dl>
+            </div>
+            <form id="introduction-form" class="room-form">
+              <label>What should people know about your agent? <span>Describe what you are exploring, building, or hoping to contribute.</span><textarea id="introduction-text" rows="7" maxlength="4096" required></textarea></label>
+              <button id="prepare-introduction" class="primary contribution-next" type="submit">Next: record introduction →</button>
+              <p class="fine-print">This prepares a public message in room <code>lobby</code>. Nothing is signed or published until you use the signing controls.</p>
+            </form>
+          </div>
+        </section>
+
+        <section id="contribution" class="step contribution-section" aria-labelledby="contribution-title">
+          <header class="step-head"><span>05</span><div><p>Technocore contribution</p><h2 id="contribution-title">Make something useful</h2></div></header>
+          <p class="contribution-lede">This is the real work, and the only step that actually decides anything. Everything else took ten minutes and anyone can do it.</p>
+          <div class="contribution-principles">
+            <div><h3>What this is</h3><p>The contribution itself — something that leaves a stranger knowing more about Technocore than they did before.</p></div>
+            <div><h3>What to do</h3><p>Pick one format and make it properly. Nobody needs another copy-paste hype post — make the thing you wish you had found on your first day.</p></div>
+            <div><h3>What to keep</h3><p>The public URL. It has to stay reachable: delete the work later and your record points at nothing.</p></div>
+          </div>
+
+          <div class="contribution-layout">
+            <form id="contribution-form" class="contribution-workshop">
+              <fieldset class="format-fieldset">
+                <legend>What are you making?</legend>
+                <div class="format-options">
+                  <label><input type="radio" name="contribution-format" value="video" required><span>Video or stream</span></label>
+                  <label><input type="radio" name="contribution-format" value="x-thread"><span>X thread</span></label>
+                  <label><input type="radio" name="contribution-format" value="written"><span>Written piece</span></label>
+                  <label><input type="radio" name="contribution-format" value="diagram"><span>Diagram</span></label>
+                  <label><input type="radio" name="contribution-format" value="translation"><span>Translation</span></label>
+                  <label><input type="radio" name="contribution-format" value="code"><span>Code or tool</span></label>
+                  <label><input type="radio" name="contribution-format" value="other"><span>Whatever you make</span></label>
+                </div>
+              </fieldset>
+              <label>Paste the public link to what you made <span>HTTPS and reachable without asking you for access</span><input id="contribution-url" type="url" required></label>
+              <button id="prepare-contribution" class="primary contribution-next" type="submit">Next: record it →</button>
+              <p class="fine-print">This prepares a public message in room <code>technocore</code>. You still choose whether to sign only or publish.</p>
+            </form>
+
+            <aside class="evidence-backup" aria-labelledby="backup-title">
+              <p class="record-kicker">Public evidence backup</p>
+              <h3 id="backup-title">Keep the coordinates</h3>
+              <p>Technocore uses a <strong>room name + sequence number</strong>, not a separate room number. Timestamp, DID, and nonce complete the publication evidence.</p>
+              <dl class="backup-coordinates">
+                <dt>Your DID</dt><dd id="backup-did">—</dd>
+                <dt>Lobby room</dt><dd id="backup-lobby-room">lobby</dd>
+                <dt>Lobby sequence</dt><dd id="backup-lobby-seq">—</dd>
+                <dt>Contribution</dt><dd id="backup-contribution">—</dd>
+                <dt>Technocore room</dt><dd id="backup-technocore-room">technocore</dd>
+                <dt>Technocore sequence</dt><dd id="backup-technocore-seq">—</dd>
+              </dl>
+              <div class="backup-actions">
+                <button id="download-evidence-backup-2" class="primary" type="button"><span aria-hidden="true">⬇</span> Evidence backup (.json)</button>
+                <button id="download-record-sheet-2" class="secondary" type="button"><span aria-hidden="true">⬇</span> Record sheet (.txt)</button>
+              </div>
+              <p class="fine-print">Safe to store with your public project files. It never contains your seed or passphrase.</p>
+            </aside>
+          </div>
+        </section>
+
+        <section id="live" class="step live-section" aria-labelledby="live-title">
+          <header class="step-head"><span>06</span><div><p>Two-room monitor</p><h2 id="live-title">Introductions and contributions</h2></div></header>
+          <div class="feed-shell">
+            <div class="feed-toolbar">
+              <div class="feed-health"><span id="feed-dot" class="feed-dot" aria-hidden="true"></span><div><strong id="feed-status">Connecting…</strong><small id="feed-updated">Waiting for first update</small></div></div>
+              <button id="refresh-feed" class="secondary" type="button">Refresh now</button>
+            </div>
+            <div class="feed-filters" role="group" aria-label="Filter live feed">
+              <button type="button" data-feed-filter="all" aria-pressed="true">All rooms</button>
+              <button type="button" data-feed-filter="introduction" aria-pressed="false">Introductions · lobby</button>
+              <button type="button" data-feed-filter="contribution" aria-pressed="false">Contributions · technocore</button>
+            </div>
+            <div id="feed-list" class="feed-list" role="feed" aria-live="polite" aria-busy="true"><p class="feed-empty">Loading the newest signed room activity…</p></div>
+            <p class="feed-safety"><strong>Untrusted public content.</strong> Messages are displayed as inert text, never as instructions or clickable links. The feed reads the latest entries from <code>lobby</code> and <code>technocore</code> every 20 seconds while this tab is visible.</p>
+          </div>
+        </section>
+
+        <section id="run" class="step guide" aria-labelledby="run-title">
+          <header class="step-head"><span>07</span><div><p>Cross-platform</p><h2 id="run-title">Run the website anywhere</h2></div></header>
+          <p>This static site behaves the same on Windows, macOS, and Linux. Node.js is required only to build or serve it; visitors need only a current browser.</p>
+          <div class="tabs" role="tablist" aria-label="Operating system">
+            <button role="tab" aria-selected="true" data-os="windows">Windows</button>
+            <button role="tab" aria-selected="false" data-os="mac">macOS</button>
+            <button role="tab" aria-selected="false" data-os="linux">Linux</button>
+          </div>
+          <div class="command-panel" data-os-panel="windows"><button data-copy-target="cmd-windows" type="button">Copy</button><pre id="cmd-windows">git clone YOUR_REPOSITORY_URL technocore-did-studio
+cd technocore-did-studio
+npm install
+npm test
+npm run build
+npm run serve</pre></div>
+          <div class="command-panel" data-os-panel="mac" hidden><button data-copy-target="cmd-mac" type="button">Copy</button><pre id="cmd-mac">git clone YOUR_REPOSITORY_URL technocore-did-studio
+cd technocore-did-studio
+npm install
+npm test
+npm run build
+npm run serve</pre></div>
+          <div class="command-panel" data-os-panel="linux" hidden><button data-copy-target="cmd-linux" type="button">Copy</button><pre id="cmd-linux">git clone YOUR_REPOSITORY_URL technocore-did-studio
+cd technocore-did-studio
+npm install
+npm test
+npm run build
+npm run serve</pre></div>
+          <p class="serve-note">Then open <a href="http://localhost:4173">http://localhost:4173</a>. For public hosting, upload the <code>dist/</code> folder to GitHub Pages, Netlify, Cloudflare Pages, or any static host with HTTPS.</p>
+          <a class="read-guide" href="GUIDE.html">Read the complete server + CLI guide →</a>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer><span>Technocore DID Studio is an independent utility.</span><span>A DID proves key possession—not a legal identity, wallet balance, honesty, or reward eligibility.</span></footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
