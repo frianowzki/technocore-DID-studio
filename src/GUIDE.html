@@ -4,9 +4,9 @@
 <body><header class="topbar"><a class="brand" href="index.html"><span class="brand-mark">T/</span><span>Technocore DID Studio</span></a><span class="local-badge"><span></span>Cross-platform guide</span><a class="source-link" href="README.md">Raw guide ↗</a></header>
 <main class="doc"><a class="back" href="index.html">← Back to DID Studio</a><p class="eyebrow">Windows · macOS · Linux</p><h1>Run the studio.<br>Run the server.<br>Keep the keys yours.</h1><p class="lede">The DID website and Technocore Chat server are separate. You can host either one, both, or use the public Technocore server with a locally served studio.</p>
 <div class="note"><strong>Identity warning:</strong> never enter a wallet seed phrase, exchange key, or private key used by another service. A Technocore DID is an independent Ed25519 identity and does not guarantee any reward.</div>
-<h2>1. DID Studio website</h2><p>Install Git and Node.js 20 or newer. These commands are identical on Windows PowerShell/Command Prompt, macOS Terminal, and Linux:</p><pre>git clone YOUR_REPOSITORY_URL technocore-did-studio
-cd technocore-did-studio
-npm install
+<h2>1. DID Studio website</h2><p>Install Git and Node.js 20 or newer. Clone the repository, enter <code>technocore-DID-studio</code> with the command appropriate for your shell, then run the npm commands below.</p><pre>git clone https://github.com/frianowzki/technocore-DID-studio.git
+cd technocore-DID-studio
+npm ci
 npm test
 npm run build
 npm run serve</pre><p>Open <code>http://localhost:4173</code>. The production-ready static output is in <code>dist/</code>; upload that folder to any HTTPS static host.</p>

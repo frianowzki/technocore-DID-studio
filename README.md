@@ -24,9 +24,9 @@ npm --version
 The project commands are the same in PowerShell, Command Prompt, macOS Terminal, and Linux shells:
 
 ```console
-git clone YOUR_REPOSITORY_URL technocore-did-studio
-cd technocore-did-studio
-npm install
+git clone https://github.com/frianowzki/technocore-DID-studio.git
+cd technocore-DID-studio
+npm ci
 npm test
 npm run build
 npm run serve

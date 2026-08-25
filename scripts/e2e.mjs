@@ -167,6 +167,10 @@ try {
       feedText: document.querySelector('#feed-list').textContent,
       feedLinks: document.querySelectorAll('#feed-list a').length,
       contributionFilterPressed: document.querySelector('[data-feed-filter="contribution"]').getAttribute('aria-pressed'),
+      windowsCommand: document.querySelector('#cmd-windows').textContent,
+      macCommand: document.querySelector('#cmd-mac').textContent,
+      linuxCommand: document.querySelector('#cmd-linux').textContent,
+      completeGuideLinkPresent: Boolean(document.querySelector('.read-guide')),
       status: document.querySelector('#status').textContent,
     };
   })()`;
@@ -198,7 +202,29 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 250));
   const feedScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
   await writeFile('artifacts/live-feed.png', Buffer.from(feedScreenshot.data, 'base64'));
-  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.recoveryBadge === 'No server recovery' && value.signEnabled && value.seedBackupName.startsWith('technocore-seed-backup-') && value.seedBackupName.endsWith('.json') && value.seedBackupFormat === 'technocore-seed-backup' && value.seedBackupDid === value.did && value.seedBackupHasPlainSeedField === false && value.seedBackupContainsPassphrase === false && value.seedBackupNetworkRequests === 0 && value.seedBackupDisabledAfterLock && value.seedBackupEnabledAfterRestore && value.restoredSeedBackupDid === value.did && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true';
+  await call('Runtime.evaluate', { expression: "document.querySelector('#run').scrollIntoView({block:'start'}); document.querySelector('[data-os=windows]').click()" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const windowsRunScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/run-windows.png', Buffer.from(windowsRunScreenshot.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.querySelector('[data-os=mac]').click()" }, sessionId);
+  const macRunScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/run-macos.png', Buffer.from(macRunScreenshot.data, 'base64'));
+  await call('Runtime.evaluate', { expression: "document.querySelector('[data-os=linux]').click()" }, sessionId);
+  const linuxRunScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/run-linux.png', Buffer.from(linuxRunScreenshot.data, 'base64'));
+  const expectedWindowsCommand = `git clone https://github.com/frianowzki/technocore-DID-studio.git
+Set-Location .\\technocore-DID-studio
+npm ci
+npm test
+npm run build
+npm run serve`;
+  const expectedPosixCommand = `git clone https://github.com/frianowzki/technocore-DID-studio.git
+cd technocore-DID-studio
+npm ci
+npm test
+npm run build
+npm run serve`;
+  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.recoveryBadge === 'No server recovery' && value.signEnabled && value.seedBackupName.startsWith('technocore-seed-backup-') && value.seedBackupName.endsWith('.json') && value.seedBackupFormat === 'technocore-seed-backup' && value.seedBackupDid === value.did && value.seedBackupHasPlainSeedField === false && value.seedBackupContainsPassphrase === false && value.seedBackupNetworkRequests === 0 && value.seedBackupDisabledAfterLock && value.seedBackupEnabledAfterRestore && value.restoredSeedBackupDid === value.did && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true' && value.windowsCommand === expectedWindowsCommand && value.macCommand === expectedPosixCommand && value.linuxCommand === expectedPosixCommand && value.completeGuideLinkPresent === false;
   console.log(JSON.stringify(value, null, 2));
   if (!passed) process.exitCode = 1;
 } finally {

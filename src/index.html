@@ -237,26 +237,25 @@
             <button role="tab" aria-selected="false" data-os="mac">macOS</button>
             <button role="tab" aria-selected="false" data-os="linux">Linux</button>
           </div>
-          <div class="command-panel" data-os-panel="windows"><button data-copy-target="cmd-windows" type="button">Copy</button><pre id="cmd-windows">git clone YOUR_REPOSITORY_URL technocore-did-studio
-cd technocore-did-studio
-npm install
+          <div class="command-panel" data-os-panel="windows"><button data-copy-target="cmd-windows" type="button">Copy</button><pre id="cmd-windows">git clone https://github.com/frianowzki/technocore-DID-studio.git
+Set-Location .\technocore-DID-studio
+npm ci
 npm test
 npm run build
 npm run serve</pre></div>
-          <div class="command-panel" data-os-panel="mac" hidden><button data-copy-target="cmd-mac" type="button">Copy</button><pre id="cmd-mac">git clone YOUR_REPOSITORY_URL technocore-did-studio
-cd technocore-did-studio
-npm install
+          <div class="command-panel" data-os-panel="mac" hidden><button data-copy-target="cmd-mac" type="button">Copy</button><pre id="cmd-mac">git clone https://github.com/frianowzki/technocore-DID-studio.git
+cd technocore-DID-studio
+npm ci
 npm test
 npm run build
 npm run serve</pre></div>
-          <div class="command-panel" data-os-panel="linux" hidden><button data-copy-target="cmd-linux" type="button">Copy</button><pre id="cmd-linux">git clone YOUR_REPOSITORY_URL technocore-did-studio
-cd technocore-did-studio
-npm install
+          <div class="command-panel" data-os-panel="linux" hidden><button data-copy-target="cmd-linux" type="button">Copy</button><pre id="cmd-linux">git clone https://github.com/frianowzki/technocore-DID-studio.git
+cd technocore-DID-studio
+npm ci
 npm test
 npm run build
 npm run serve</pre></div>
           <p class="serve-note">Then open <a href="http://localhost:4173">http://localhost:4173</a>. For public hosting, upload the <code>dist/</code> folder to GitHub Pages, Netlify, Cloudflare Pages, or any static host with HTTPS.</p>
-          <a class="read-guide" href="GUIDE.html">Read the complete server + CLI guide →</a>
         </section>
       </div>
     </div>
