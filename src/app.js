@@ -463,6 +463,46 @@ for (const button of document.querySelectorAll('[data-copy-target]')) {
   button.addEventListener('click', () => copy(byId(button.dataset.copyTarget).textContent, 'Command'));
 }
 
+function setupScrollEffects() {
+  const links = [...document.querySelectorAll('.rail a[href^="#"]')];
+  const sections = links.map((link) => document.querySelector(link.hash)).filter(Boolean);
+  if (!links.length || !sections.length) return;
+
+  document.documentElement.classList.add('scroll-effects');
+  const revealObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      entry.target.classList.add('is-visible');
+      revealObserver.unobserve(entry.target);
+    }
+  }, { rootMargin: '0px 0px -10% 0px', threshold: 0.08 });
+  sections.forEach((section) => revealObserver.observe(section));
+
+  let frame = null;
+  const updateCurrent = () => {
+    frame = null;
+    const marker = Math.min(window.innerHeight * 0.35, 280);
+    let current = sections[0];
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= marker) current = section;
+    }
+    const atDocumentEnd = Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight - 2;
+    if (atDocumentEnd) current = sections.at(-1);
+    const currentHash = `#${current.id}`;
+    links.forEach((link) => {
+      if (link.getAttribute('href') === currentHash) link.setAttribute('aria-current', 'step');
+      else link.removeAttribute('aria-current');
+    });
+  };
+  const queueUpdate = () => {
+    if (frame === null) frame = requestAnimationFrame(updateCurrent);
+  };
+  window.addEventListener('scroll', queueUpdate, { passive: true });
+  window.addEventListener('resize', queueUpdate);
+  updateCurrent();
+}
+
+setupScrollEffects();
 updateRecordBoard();
 
 if (!globalThis.crypto?.subtle) {
