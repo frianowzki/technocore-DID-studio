@@ -26,6 +26,29 @@ test('combines introductions and contributions newest first', async () => {
   assert.equal(feed.messages[1].kind, 'introduction');
 });
 
+test('requests and retains the maximum 200 entries from each room', async () => {
+  const requestedLimits = [];
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    const room = parsed.pathname.split('/').at(-1);
+    requestedLimits.push(parsed.searchParams.get('limit'));
+    const start = room === 'lobby' ? 1 : 201;
+    const messages = Array.from({ length: 200 }, (_, index) => ({
+      seq: start + index,
+      ts: new Date(Date.UTC(2026, 7, 25, 9, 0, index)).toISOString(),
+      from: `did:key:z6Mk${room}${index}`,
+      text: `${room} entry ${index}`,
+      nonce: start + index,
+    }));
+    return new Response(JSON.stringify({ room, count: 200, messages }), { status: 200 });
+  };
+  const feed = await getLiveFeed({ fetchImpl });
+  assert.deepEqual(requestedLimits, ['200', '200']);
+  assert.equal(feed.messages.length, 400);
+  assert.equal(feed.messages.filter(({ kind }) => kind === 'introduction').length, 200);
+  assert.equal(feed.messages.filter(({ kind }) => kind === 'contribution').length, 200);
+});
+
 test('rejects malformed upstream data instead of forwarding it', async () => {
   await assert.rejects(
     () => getLiveFeed({ fetchImpl: async () => new Response('{"messages":"wrong"}', { status: 200 }) }),

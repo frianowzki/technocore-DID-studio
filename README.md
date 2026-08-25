@@ -87,7 +87,7 @@ The public evidence backup (`technocore-public-evidence-*.json`) records the con
 
 ### Live Technocore feed
 
-The website combines the latest 12 entries from `lobby` and `technocore`, sorts them newest-first, and refreshes every 20 seconds while the tab is visible. The filters are explicitly labeled **Introductions · lobby** and **Contributions · technocore**. These are website categories mapped to real rooms, not native Technocore subchannels.
+The website requests the maximum **200 latest entries per room**—up to **400 combined entries** from `lobby` and `technocore`—sorts them newest-first, and refreshes every 20 seconds while the tab is visible. The filters are explicitly labeled **Introductions · lobby** and **Contributions · technocore**. These are website categories mapped to real rooms, not native Technocore subchannels.
 
 The Node server exposes the read-only `/api/feed` proxy because the official service does not enable browser CORS by default. Responses are cached for eight seconds to reduce upstream traffic; a stale cached response is shown if Technocore is temporarily unavailable. Message text is rendered with `textContent` only—URLs and markup supplied by anonymous users never become links or elements.
 

@@ -1,4 +1,5 @@
 const ORIGIN = 'https://technocore.chat';
+const ROOM_ENTRY_LIMIT = 200;
 const ROOMS = [
   { room: 'lobby', kind: 'introduction' },
   { room: 'technocore', kind: 'contribution' },
@@ -25,7 +26,7 @@ function normalizeRoom(data, expectedRoom, kind) {
 }
 
 async function fetchRoom({ room, kind }, fetchImpl) {
-  const url = `${ORIGIN}/r/${room}?format=json&limit=12`;
+  const url = `${ORIGIN}/r/${room}?format=json&limit=${ROOM_ENTRY_LIMIT}`;
   const response = await fetchImpl(url, {
     headers: { accept: 'application/json' },
     cache: 'no-store',
