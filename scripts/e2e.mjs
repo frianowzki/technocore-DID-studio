@@ -203,6 +203,12 @@ try {
       windowsCommand: document.querySelector('#cmd-windows').textContent,
       macCommand: document.querySelector('#cmd-mac').textContent,
       linuxCommand: document.querySelector('#cmd-linux').textContent,
+      serveNoteFontSize: getComputedStyle(document.querySelector('.serve-note')).fontSize,
+      serveNoteLineHeight: getComputedStyle(document.querySelector('.serve-note')).lineHeight,
+      serveNoteFontFamily: getComputedStyle(document.querySelector('.serve-note')).fontFamily,
+      serveLinkFontFamily: getComputedStyle(document.querySelector('.serve-note a')).fontFamily,
+      serveCodeFontFamily: getComputedStyle(document.querySelector('.serve-note code')).fontFamily,
+      bodyFontFamily: getComputedStyle(document.body).fontFamily,
       completeGuideLinkPresent: Boolean(document.querySelector('.read-guide')),
       topbarText: document.querySelector('.topbar').textContent.replace(/\\s+/g, ' ').trim(),
       brandPresent: Boolean(document.querySelector('.brand')),
@@ -310,8 +316,9 @@ npm run serve`;
   const contentPassed = value.footerJustify === 'flex-start' && value.footerTextAlign === 'left' && value.footerTextLeft <= 64 && value.contributionTitle === 'Turn your work into proof' && value.contributionLede === 'Don’t just announce that you are here. Publish something another builder can learn from, use, or carry forward.' && JSON.stringify(value.contributionPrinciples) === JSON.stringify(expectedContributionPrinciples) && JSON.stringify(value.contributionFormatLabels) === JSON.stringify(expectedContributionFormats) && value.contributionUrlCopy === 'Where can people experience it? Paste a public HTTPS URL that opens without requesting access.' && value.contributionCta === 'Prepare contribution record →' && value.contributionFinePrint === 'This stages a public contribution for room technocore. Review it locally, then choose whether to sign only or publish.' && value.contributionEvidenceCopy.includes('Public proof kit Save the trail, not the secret') && value.contributionEvidenceCopy.includes('Download public evidence (.json)') && value.contributionEvidenceCopy.includes('Download public record (.txt)');
   const downloadIsolationPassed = value.initialBackupName.startsWith('technocore-identity-') && value.initialBackupName.endsWith('.json') && value.initialBackupFormat === 'technocore-did-studio';
   const themePassed = value.themeTogglePresent && value.themeToggleVisibleText === '' && value.themeToggleHasIcon && value.themeToggleLabel === 'Switch to light mode' && value.initialTheme === 'light' && value.themeAfterToggle === 'dark' && value.savedTheme === 'dark' && value.lightPaper !== value.darkPaper && value.themeBesideGithub;
+  const serveTypographyPassed = value.serveNoteFontSize === '14px' && value.serveNoteLineHeight === '23.1px' && value.serveNoteFontFamily === value.bodyFontFamily && value.serveLinkFontFamily === value.bodyFontFamily && value.serveCodeFontFamily === value.bodyFontFamily;
   console.log(JSON.stringify(value, null, 2));
-  if (!passed || !contentPassed || !downloadIsolationPassed || !themePassed) process.exitCode = 1;
+  if (!passed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed) process.exitCode = 1;
 } finally {
   ws.close();
   const exited = new Promise((resolve) => child.once('exit', resolve));
