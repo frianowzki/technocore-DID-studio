@@ -463,6 +463,27 @@ for (const button of document.querySelectorAll('[data-copy-target]')) {
   button.addEventListener('click', () => copy(byId(button.dataset.copyTarget).textContent, 'Command'));
 }
 
+function setupThemeToggle() {
+  const toggle = byId('theme-toggle');
+  const storageKey = 'technocore-theme';
+  const applyTheme = (theme, persist = false) => {
+    const nextTheme = theme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    const label = nextTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    toggle.setAttribute('aria-label', label);
+    toggle.title = label;
+    if (persist) {
+      try { localStorage.setItem(storageKey, nextTheme); } catch {}
+    }
+  };
+
+  applyTheme(document.documentElement.dataset.theme);
+  toggle.addEventListener('click', () => {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+  });
+}
+
 function setupScrollEffects() {
   const links = [...document.querySelectorAll('.rail a[href^="#"]')];
   const sections = links.map((link) => document.querySelector(link.hash)).filter(Boolean);
@@ -502,6 +523,7 @@ function setupScrollEffects() {
   updateCurrent();
 }
 
+setupThemeToggle();
 setupScrollEffects();
 updateRecordBoard();
 

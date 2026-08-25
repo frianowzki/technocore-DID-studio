@@ -30,6 +30,7 @@ try {
   const { sessionId } = await call('Target.attachToTarget', { targetId, flatten: true });
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false }, sessionId);
   await call('Page.enable', {}, sessionId);
+  await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] }, sessionId);
   await call('Page.navigate', { url: 'http://localhost:4173' }, sessionId);
   await new Promise((resolve) => setTimeout(resolve, 1200));
   const expression = `(async () => {
@@ -135,8 +136,27 @@ try {
     document.querySelector('#download-evidence-backup-2').click();
     document.querySelector('#download-record-sheet-2').click();
     HTMLAnchorElement.prototype.click = originalAnchorClick;
+    const themeToggle = document.querySelector('#theme-toggle');
+    const initialTheme = document.documentElement.dataset.theme ?? '';
+    const lightPaper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+    themeToggle?.click();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    const themeAfterToggle = document.documentElement.dataset.theme ?? '';
+    const darkPaper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+    const themeBounds = themeToggle?.getBoundingClientRect();
+    const githubBounds = document.querySelector('.github-link').getBoundingClientRect();
     return {
       did,
+      themeTogglePresent: Boolean(themeToggle),
+      themeToggleVisibleText: themeToggle?.textContent.trim() ?? '',
+      themeToggleHasIcon: Boolean(themeToggle?.querySelector('svg')),
+      themeToggleLabel: themeToggle?.getAttribute('aria-label') ?? '',
+      initialTheme,
+      themeAfterToggle,
+      savedTheme: localStorage.getItem('technocore-theme'),
+      lightPaper,
+      darkPaper,
+      themeBesideGithub: Boolean(themeBounds && Math.abs(themeBounds.right - githubBounds.left) <= 12),
       initialBackupName,
       initialBackupFormat: initialBackupBlob ? JSON.parse(await initialBackupBlob.text()).format : '',
       initialRecordCount,
@@ -289,8 +309,9 @@ npm run serve`;
   const expectedContributionFormats = ['Teach it on video', 'Break it down on X', 'Write the deep dive', 'Map it visually', 'Translate for a new audience', 'Ship code or a tool', 'Create your own format'];
   const contentPassed = value.footerJustify === 'flex-start' && value.footerTextAlign === 'left' && value.footerTextLeft <= 64 && value.contributionTitle === 'Turn your work into proof' && value.contributionLede === 'Don’t just announce that you are here. Publish something another builder can learn from, use, or carry forward.' && JSON.stringify(value.contributionPrinciples) === JSON.stringify(expectedContributionPrinciples) && JSON.stringify(value.contributionFormatLabels) === JSON.stringify(expectedContributionFormats) && value.contributionUrlCopy === 'Where can people experience it? Paste a public HTTPS URL that opens without requesting access.' && value.contributionCta === 'Prepare contribution record →' && value.contributionFinePrint === 'This stages a public contribution for room technocore. Review it locally, then choose whether to sign only or publish.' && value.contributionEvidenceCopy.includes('Public proof kit Save the trail, not the secret') && value.contributionEvidenceCopy.includes('Download public evidence (.json)') && value.contributionEvidenceCopy.includes('Download public record (.txt)');
   const downloadIsolationPassed = value.initialBackupName.startsWith('technocore-identity-') && value.initialBackupName.endsWith('.json') && value.initialBackupFormat === 'technocore-did-studio';
+  const themePassed = value.themeTogglePresent && value.themeToggleVisibleText === '' && value.themeToggleHasIcon && value.themeToggleLabel === 'Switch to light mode' && value.initialTheme === 'light' && value.themeAfterToggle === 'dark' && value.savedTheme === 'dark' && value.lightPaper !== value.darkPaper && value.themeBesideGithub;
   console.log(JSON.stringify(value, null, 2));
-  if (!passed || !contentPassed || !downloadIsolationPassed) process.exitCode = 1;
+  if (!passed || !contentPassed || !downloadIsolationPassed || !themePassed) process.exitCode = 1;
 } finally {
   ws.close();
   const exited = new Promise((resolve) => child.once('exit', resolve));
