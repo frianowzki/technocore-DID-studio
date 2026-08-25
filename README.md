@@ -267,6 +267,4 @@ Before exposing a self-hosted instance:
 ## Sources
 
 - Official service and protocol: https://github.com/flop-labs/technocore-chat
-- Cross-platform encrypted Python starter: https://github.com/zunmax/technocore-did-starter
-- Simplified Ubuntu/Debian guide: https://github.com/mztacat/Simplified-FLOP-Labs-Technocore-Agent-Guid
 - Live protocol manual: https://technocore.chat/llms.txt
