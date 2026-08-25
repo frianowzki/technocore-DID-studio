@@ -167,50 +167,59 @@
         </section>
 
         <section id="contribution" class="step contribution-section" aria-labelledby="contribution-title">
-          <header class="step-head"><span>05</span><div><p>Technocore contribution</p><h2 id="contribution-title">Make something useful</h2></div></header>
-          <p class="contribution-lede">This is the real work, and the only step that actually decides anything. Everything else took ten minutes and anyone can do it.</p>
+          <header class="step-head"><span>05</span><div><p>Technocore contribution</p><h2 id="contribution-title">Turn your work into proof</h2></div></header>
+          <p class="contribution-lede">Don’t just announce that you are here. Publish something another builder can learn from, use, or carry forward.</p>
           <div class="contribution-principles">
-            <div><h3>What this is</h3><p>The contribution itself — something that leaves a stranger knowing more about Technocore than they did before.</p></div>
-            <div><h3>What to do</h3><p>Pick one format and make it properly. Nobody needs another copy-paste hype post — make the thing you wish you had found on your first day.</p></div>
-            <div><h3>What to keep</h3><p>The public URL. It has to stay reachable: delete the work later and your record points at nothing.</p></div>
+            <div>
+              <h3>Build the missing piece</h3>
+              <p>Create the guide, tool, translation, or explanation you wish had existed when you arrived.</p>
+            </div>
+            <div>
+              <h3>Make it worth opening</h3>
+              <p>Choose one format and do it with care. Clarity beats recycled hype every time.</p>
+            </div>
+            <div>
+              <h3>Leave a trail that lasts</h3>
+              <p>Keep the public HTTPS URL reachable so the signed record continues to point at real work.</p>
+            </div>
           </div>
 
           <div class="contribution-layout">
             <form id="contribution-form" class="contribution-workshop">
               <fieldset class="format-fieldset">
-                <legend>What are you making?</legend>
+                <legend>Choose your medium</legend>
                 <div class="format-options">
-                  <label><input type="radio" name="contribution-format" value="video" required><span>Video or stream</span></label>
-                  <label><input type="radio" name="contribution-format" value="x-thread"><span>X thread</span></label>
-                  <label><input type="radio" name="contribution-format" value="written"><span>Written piece</span></label>
-                  <label><input type="radio" name="contribution-format" value="diagram"><span>Diagram</span></label>
-                  <label><input type="radio" name="contribution-format" value="translation"><span>Translation</span></label>
-                  <label><input type="radio" name="contribution-format" value="code"><span>Code or tool</span></label>
-                  <label><input type="radio" name="contribution-format" value="other"><span>Whatever you make</span></label>
+                  <label><input type="radio" name="contribution-format" value="video" required><span>Teach it on video</span></label>
+                  <label><input type="radio" name="contribution-format" value="x-thread"><span>Break it down on X</span></label>
+                  <label><input type="radio" name="contribution-format" value="written"><span>Write the deep dive</span></label>
+                  <label><input type="radio" name="contribution-format" value="diagram"><span>Map it visually</span></label>
+                  <label><input type="radio" name="contribution-format" value="translation"><span>Translate for a new audience</span></label>
+                  <label><input type="radio" name="contribution-format" value="code"><span>Ship code or a tool</span></label>
+                  <label><input type="radio" name="contribution-format" value="other"><span>Create your own format</span></label>
                 </div>
               </fieldset>
-              <label>Paste the public link to what you made <span>HTTPS and reachable without asking you for access</span><input id="contribution-url" type="url" required></label>
-              <button id="prepare-contribution" class="primary contribution-next" type="submit">Next: record it →</button>
-              <p class="fine-print">This prepares a public message in room <code>technocore</code>. You still choose whether to sign only or publish.</p>
+              <label>Where can people experience it? <span>Paste a public HTTPS URL that opens without requesting access.</span><input id="contribution-url" type="url" required></label>
+              <button id="prepare-contribution" class="primary contribution-next" type="submit">Prepare contribution record →</button>
+              <p class="fine-print">This stages a public contribution for room <code>technocore</code>. Review it locally, then choose whether to sign only or publish.</p>
             </form>
 
             <aside class="evidence-backup" aria-labelledby="backup-title">
-              <p class="record-kicker">Public evidence backup</p>
-              <h3 id="backup-title">Keep the coordinates</h3>
-              <p>Technocore uses a <strong>room name + sequence number</strong>, not a separate room number. Timestamp, DID, and nonce complete the publication evidence.</p>
+              <p class="record-kicker">Public proof kit</p>
+              <h3 id="backup-title">Save the trail, not the secret</h3>
+              <p>A contribution is anchored by its <strong>room slug + room-specific sequence</strong>. Timestamp, signer DID, nonce, stored text, and signed request URL complete the public trail.</p>
               <dl class="backup-coordinates">
-                <dt>Your DID</dt><dd id="backup-did">—</dd>
-                <dt>Lobby room</dt><dd id="backup-lobby-room">lobby</dd>
-                <dt>Lobby sequence</dt><dd id="backup-lobby-seq">—</dd>
-                <dt>Contribution</dt><dd id="backup-contribution">—</dd>
-                <dt>Technocore room</dt><dd id="backup-technocore-room">technocore</dd>
-                <dt>Technocore sequence</dt><dd id="backup-technocore-seq">—</dd>
+                <dt>Signer DID</dt><dd id="backup-did">—</dd>
+                <dt>Introduction room</dt><dd id="backup-lobby-room">lobby</dd>
+                <dt>Introduction sequence</dt><dd id="backup-lobby-seq">—</dd>
+                <dt>Published work</dt><dd id="backup-contribution">—</dd>
+                <dt>Contribution room</dt><dd id="backup-technocore-room">technocore</dd>
+                <dt>Contribution sequence</dt><dd id="backup-technocore-seq">—</dd>
               </dl>
               <div class="backup-actions">
-                <button id="download-evidence-backup-2" class="primary" type="button"><span aria-hidden="true">⬇</span> Evidence backup (.json)</button>
-                <button id="download-record-sheet-2" class="secondary" type="button"><span aria-hidden="true">⬇</span> Record sheet (.txt)</button>
+                <button id="download-evidence-backup-2" class="primary" type="button"><span aria-hidden="true">⬇</span> Download public evidence (.json)</button>
+                <button id="download-record-sheet-2" class="secondary" type="button"><span aria-hidden="true">⬇</span> Download public record (.txt)</button>
               </div>
-              <p class="fine-print">Safe to store with your public project files. It never contains your seed or passphrase.</p>
+              <p class="fine-print">Keep these files beside the public project. They contain evidence coordinates only—never your seed, passphrase, PEM, or encrypted private backup.</p>
             </aside>
           </div>
         </section>
