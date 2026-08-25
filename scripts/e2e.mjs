@@ -34,11 +34,19 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 1200));
   const expression = `(async () => {
     const set = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    let initialBackupBlob;
+    let initialBackupName = '';
+    const initialCreateObjectURL = URL.createObjectURL;
+    const initialAnchorClick = HTMLAnchorElement.prototype.click;
+    URL.createObjectURL = (blob) => { initialBackupBlob = blob; return 'blob:e2e-initial-backup'; };
+    HTMLAnchorElement.prototype.click = function () { initialBackupName = this.download; };
     set('#new-passphrase', 'correct horse battery staple');
     set('#confirm-passphrase', 'correct horse battery staple');
     document.querySelector('#safety-check').checked = true;
     document.querySelector('#generate-form').requestSubmit();
     await new Promise(resolve => setTimeout(resolve, 1300));
+    URL.createObjectURL = initialCreateObjectURL;
+    HTMLAnchorElement.prototype.click = initialAnchorClick;
     const did = document.querySelector('#did-value').textContent;
     const initialRecordCount = document.querySelector('#record-count').textContent;
     set('#message', ' hello\\nworld ');
@@ -129,6 +137,8 @@ try {
     HTMLAnchorElement.prototype.click = originalAnchorClick;
     return {
       did,
+      initialBackupName,
+      initialBackupFormat: initialBackupBlob ? JSON.parse(await initialBackupBlob.text()).format : '',
       initialRecordCount,
       identityReady: !document.querySelector('#identity-ready').hidden,
       recoveryBadge: document.querySelector('.no-recovery').textContent,
@@ -278,8 +288,9 @@ npm run serve`;
   ];
   const expectedContributionFormats = ['Teach it on video', 'Break it down on X', 'Write the deep dive', 'Map it visually', 'Translate for a new audience', 'Ship code or a tool', 'Create your own format'];
   const contentPassed = value.footerJustify === 'flex-start' && value.footerTextAlign === 'left' && value.footerTextLeft <= 64 && value.contributionTitle === 'Turn your work into proof' && value.contributionLede === 'Don’t just announce that you are here. Publish something another builder can learn from, use, or carry forward.' && JSON.stringify(value.contributionPrinciples) === JSON.stringify(expectedContributionPrinciples) && JSON.stringify(value.contributionFormatLabels) === JSON.stringify(expectedContributionFormats) && value.contributionUrlCopy === 'Where can people experience it? Paste a public HTTPS URL that opens without requesting access.' && value.contributionCta === 'Prepare contribution record →' && value.contributionFinePrint === 'This stages a public contribution for room technocore. Review it locally, then choose whether to sign only or publish.' && value.contributionEvidenceCopy.includes('Public proof kit Save the trail, not the secret') && value.contributionEvidenceCopy.includes('Download public evidence (.json)') && value.contributionEvidenceCopy.includes('Download public record (.txt)');
+  const downloadIsolationPassed = value.initialBackupName.startsWith('technocore-identity-') && value.initialBackupName.endsWith('.json') && value.initialBackupFormat === 'technocore-did-studio';
   console.log(JSON.stringify(value, null, 2));
-  if (!passed || !contentPassed) process.exitCode = 1;
+  if (!passed || !contentPassed || !downloadIsolationPassed) process.exitCode = 1;
 } finally {
   ws.close();
   const exited = new Promise((resolve) => child.once('exit', resolve));
