@@ -4,7 +4,10 @@ import {
   base58btcEncode,
   createDid,
   decryptIdentity,
+  decryptPortableBackup,
+  decryptSeedBackup,
   encryptIdentity,
+  encryptSeedBackup,
   normalizeText,
   signMessage,
   signedMessageUrl,
@@ -37,6 +40,25 @@ test('encrypts and restores a seed without exposing it in the backup JSON', asyn
   assert.equal(JSON.stringify(backup).includes(SEED), false);
   assert.equal(await decryptIdentity(backup, 'correct horse battery staple'), SEED);
   await assert.rejects(decryptIdentity(backup, 'wrong password here'), /incorrect passphrase/i);
+});
+
+test('creates a separate passphrase-encrypted seed-only backup', async () => {
+  const backup = await encryptSeedBackup(SEED, DID, 'a different seed backup passphrase');
+  const serialized = JSON.stringify(backup);
+  assert.equal(backup.format, 'technocore-seed-backup');
+  assert.equal(backup.did, DID);
+  assert.equal(serialized.includes(SEED), false);
+  assert.equal(serialized.includes('a different seed backup passphrase'), false);
+  assert.equal(await decryptSeedBackup(backup, 'a different seed backup passphrase'), SEED);
+  await assert.rejects(decryptSeedBackup(backup, 'incorrect seed passphrase'), /incorrect passphrase/i);
+});
+
+test('restores either portable backup format through one entry point', async () => {
+  const identity = await encryptIdentity(SEED, DID, 'identity backup passphrase');
+  const seedOnly = await encryptSeedBackup(SEED, DID, 'seed only backup passphrase');
+  assert.deepEqual(await decryptPortableBackup(identity, 'identity backup passphrase'), { seed: SEED, did: DID, format: 'technocore-did-studio' });
+  assert.deepEqual(await decryptPortableBackup(seedOnly, 'seed only backup passphrase'), { seed: SEED, did: DID, format: 'technocore-seed-backup' });
+  await assert.rejects(decryptPortableBackup({ format: 'unknown' }, 'anything long enough'), /unsupported backup format/i);
 });
 
 test('builds a URL with encoded path components and only HTTPS remote origins', () => {

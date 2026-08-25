@@ -1,7 +1,8 @@
 import {
   createDid,
-  decryptIdentity,
+  decryptPortableBackup,
   encryptIdentity,
+  encryptSeedBackup,
   generateSeed,
   nextNonce,
   signMessage,
@@ -60,6 +61,9 @@ function updateRecordBoard() {
   if (state.identitySource === 'generated') {
     byId('pem-status').textContent = 'not created here — encrypted JSON downloaded';
     byId('passphrase-status').textContent = 'chosen — never displayed';
+  } else if (state.identitySource === 'seed-restored') {
+    byId('pem-status').textContent = 'not created here — encrypted seed-only JSON unlocked';
+    byId('passphrase-status').textContent = 'entered — never displayed';
   } else if (state.identitySource === 'restored') {
     byId('pem-status').textContent = 'not created here — JSON backup unlocked';
     byId('passphrase-status').textContent = 'entered — never displayed';
@@ -78,6 +82,7 @@ function setIdentity(seed, did, backup = null, source = 'restored') {
   byId('identity-empty').hidden = true;
   byId('identity-ready').hidden = false;
   byId('sign-fieldset').disabled = false;
+  byId('seed-backup-fieldset').disabled = false;
   byId('current-did').value = did;
   document.body.dataset.identity = 'ready';
   updateRecordBoard();
@@ -120,7 +125,7 @@ byId('generate-form').addEventListener('submit', async (event) => {
     const did = await createDid(seed);
     const backup = await encryptIdentity(seed, did, passphrase);
     setIdentity(seed, did, backup, 'generated');
-    downloadJson(backup, `technocore-identity-${did.slice(-8)}.json`);
+    downloadJson(backup, privateBackupFilename(backup, did));
     byId('generate-form').reset();
     announce('Identity generated. Your encrypted backup was downloaded; keep it and the passphrase separately.', 'success');
     byId('identity').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -138,9 +143,10 @@ byId('restore-form').addEventListener('submit', async (event) => {
   if (!file) return announce('Choose an identity backup file.', 'error');
   try {
     const backup = JSON.parse(await file.text());
-    const seed = await decryptIdentity(backup, byId('restore-passphrase').value);
-    const did = await createDid(seed);
-    setIdentity(seed, did, backup, 'restored');
+    const restored = await decryptPortableBackup(backup, byId('restore-passphrase').value);
+    const did = await createDid(restored.seed);
+    const source = restored.format === 'technocore-seed-backup' ? 'seed-restored' : 'restored';
+    setIdentity(restored.seed, did, backup, source);
     byId('restore-form').reset();
     announce('Identity restored in memory for this tab only.', 'success');
     byId('identity').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -149,11 +155,38 @@ byId('restore-form').addEventListener('submit', async (event) => {
   }
 });
 
+function privateBackupFilename(backup, did) {
+  const prefix = backup?.format === 'technocore-seed-backup' ? 'technocore-seed-backup' : 'technocore-identity';
+  return `${prefix}-${did.slice(-8)}.json`;
+}
+
 byId('copy-did').addEventListener('click', () => copy(state.did, 'DID'));
 byId('download-backup').addEventListener('click', () => {
   if (!state.backup) return announce('Restore or generate an identity first.', 'error');
-  downloadJson(state.backup, `technocore-identity-${state.did.slice(-8)}.json`);
+  downloadJson(state.backup, privateBackupFilename(state.backup, state.did));
   announce('Encrypted backup downloaded again.', 'success');
+});
+
+byId('seed-backup-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!state.seed || !state.did) return announce('Unlock an identity before creating a seed-only backup.', 'error');
+  const passphrase = byId('seed-backup-passphrase').value;
+  if (passphrase !== byId('seed-backup-confirmation').value) return announce('Seed-backup passphrases do not match.', 'error');
+  if (!byId('seed-backup-check').checked) return announce('Confirm the seed-backup safety acknowledgement.', 'error');
+  const button = byId('download-seed-backup');
+  button.disabled = true;
+  button.textContent = 'Encrypting seed backup…';
+  try {
+    const backup = await encryptSeedBackup(state.seed, state.did, passphrase);
+    downloadJson(backup, privateBackupFilename(backup, state.did));
+    event.currentTarget.reset();
+    announce('Encrypted seed-only backup downloaded. Store its separate passphrase somewhere else.', 'success');
+  } catch (error) {
+    announce(error.message, 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Download encrypted seed-only backup';
+  }
 });
 byId('switch-identity').addEventListener('click', () => {
   state.seed = null;
@@ -168,6 +201,8 @@ byId('switch-identity').addEventListener('click', () => {
   byId('identity-empty').hidden = false;
   byId('identity-ready').hidden = true;
   byId('sign-fieldset').disabled = true;
+  byId('seed-backup-fieldset').disabled = true;
+  byId('seed-backup-form').reset();
   byId('signed-result').hidden = true;
   byId('publication-result').hidden = true;
   byId('current-did').value = '';

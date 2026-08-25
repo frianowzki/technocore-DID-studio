@@ -130,6 +130,51 @@ export async function encryptIdentity(seedHex, did, passphrase) {
   };
 }
 
+export async function encryptSeedBackup(seedHex, did, passphrase) {
+  if (typeof passphrase !== 'string' || Array.from(passphrase).length < 12) {
+    throw new Error('Passphrase must contain at least 12 characters.');
+  }
+  if (!DID_RE.test(did) || await createDid(seedHex) !== did) throw new Error('DID does not match the identity seed.');
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveEncryptionKey(passphrase, salt, ['encrypt']);
+  const additionalData = encoder.encode(`technocore-seed-backup|${did}`);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData }, key, hexToBytes(seedHex));
+  return {
+    format: 'technocore-seed-backup',
+    version: 1,
+    did,
+    purpose: 'Passphrase-encrypted Ed25519 seed recovery backup. Secret — never share.',
+    crypto: {
+      kdf: 'PBKDF2-SHA256',
+      iterations: PBKDF2_ITERATIONS,
+      cipher: 'AES-256-GCM',
+      salt: base64urlEncode(salt),
+      iv: base64urlEncode(iv),
+      ciphertext: base64urlEncode(new Uint8Array(ciphertext)),
+    },
+  };
+}
+
+export async function decryptSeedBackup(backup, passphrase) {
+  try {
+    if (backup?.format !== 'technocore-seed-backup' || backup?.version !== 1 || !DID_RE.test(backup.did)) throw new Error('unsupported');
+    if (backup.crypto?.kdf !== 'PBKDF2-SHA256' || backup.crypto?.iterations !== PBKDF2_ITERATIONS || backup.crypto?.cipher !== 'AES-256-GCM') throw new Error('unsupported');
+    const salt = base64urlDecode(backup.crypto.salt);
+    const iv = base64urlDecode(backup.crypto.iv);
+    const ciphertext = base64urlDecode(backup.crypto.ciphertext);
+    const key = await deriveEncryptionKey(passphrase, salt, ['decrypt']);
+    const additionalData = encoder.encode(`technocore-seed-backup|${backup.did}`);
+    const clear = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData }, key, ciphertext);
+    const seedHex = bytesToHex(new Uint8Array(clear));
+    if (await createDid(seedHex) !== backup.did) throw new Error('mismatch');
+    return seedHex;
+  } catch (error) {
+    if (error?.message === 'unsupported') throw new Error('Unsupported or malformed seed-only backup.');
+    throw new Error('Incorrect passphrase or damaged seed-only backup.');
+  }
+}
+
 export async function decryptIdentity(backup, passphrase) {
   try {
     if (backup?.format !== 'technocore-did-studio' || backup?.version !== 1 || !DID_RE.test(backup.did)) {
@@ -150,6 +195,14 @@ export async function decryptIdentity(backup, passphrase) {
     if (error?.message === 'unsupported') throw new Error('Unsupported or malformed identity backup.');
     throw new Error('Incorrect passphrase or damaged identity backup.');
   }
+}
+
+export async function decryptPortableBackup(backup, passphrase) {
+  let seed;
+  if (backup?.format === 'technocore-did-studio') seed = await decryptIdentity(backup, passphrase);
+  else if (backup?.format === 'technocore-seed-backup') seed = await decryptSeedBackup(backup, passphrase);
+  else throw new Error('Unsupported backup format. Choose an encrypted identity JSON or encrypted seed-only JSON file.');
+  return { seed, did: backup.did, format: backup.format };
 }
 
 export function signedMessageUrl(baseUrl, room, did, signature, nonce, text) {

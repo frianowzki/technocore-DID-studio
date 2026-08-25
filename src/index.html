@@ -55,8 +55,8 @@
 
             <form id="restore-form" class="form-block secondary-block">
               <h3>Existing identity</h3>
-              <p>Open a backup created by this studio. Decryption happens locally and the clear key remains only in memory.</p>
-              <label>Encrypted backup<input id="backup-file" type="file" accept="application/json,.json" required></label>
+              <p>Open an encrypted identity JSON or encrypted seed-only JSON backup. Decryption happens locally and the clear key remains only in memory.</p>
+              <label>Encrypted private backup<input id="backup-file" type="file" accept="application/json,.json" required></label>
               <label>Passphrase<input id="restore-passphrase" type="password" autocomplete="current-password" required></label>
               <button class="secondary" type="submit">Restore for this session</button>
             </form>
@@ -81,7 +81,7 @@
             <div class="secret-panel">
               <div class="record-title"><div><p class="record-kicker">Secret — never share</p><h3 id="record-board-title">Private identity</h3></div><span class="no-recovery">No recovery</span></div>
               <dl class="secret-status"><dt>identity.pem</dt><dd id="pem-status">not created yet</dd><dt>Passphrase</dt><dd id="passphrase-status">not chosen yet</dd></dl>
-              <p>This browser studio creates an encrypted JSON backup, not <code>identity.pem</code>. The PEM belongs to the separate Python CLI workflow.</p>
+              <p>This browser studio creates two private encrypted JSON formats: the normal identity backup and the optional seed-only recovery backup. It does not create <code>identity.pem</code>; PEM belongs to the separate Python CLI workflow.</p>
             </div>
 
             <div class="public-panel">
@@ -99,6 +99,22 @@
               <p class="fine-print">Both downloads contain public evidence only. They never include your seed, backup file, or passphrase.</p>
             </div>
           </div>
+
+          <form id="seed-backup-form" class="seed-backup-panel" aria-labelledby="seed-backup-title">
+            <div class="seed-backup-copy">
+              <p class="record-kicker">Secret — never share</p>
+              <h3 id="seed-backup-title">Encrypted seed-only recovery</h3>
+              <p>Create a second private backup for the same DID. It contains only the Ed25519 seed encrypted under a separate passphrase—not public records, contributions, or room history.</p>
+              <p class="seed-warning"><strong>Do not copy the seed into a chat or support ticket. The keygen output contains your private key.</strong> Anyone with the seed can permanently impersonate this DID.</p>
+            </div>
+            <fieldset id="seed-backup-fieldset" disabled>
+              <label>Separate seed-backup passphrase <span>12+ characters; store separately from the file</span><input id="seed-backup-passphrase" type="password" minlength="12" autocomplete="new-password" required></label>
+              <label>Confirm seed-backup passphrase<input id="seed-backup-confirmation" type="password" minlength="12" autocomplete="new-password" required></label>
+              <label class="check"><input id="seed-backup-check" type="checkbox" required><span>I understand this encrypted file is secret and becomes unusable if I lose its separate passphrase.</span></label>
+              <button id="download-seed-backup" class="seed-download" type="submit">Download encrypted seed-only backup</button>
+              <p class="fine-print">The raw seed is never displayed, copied, logged, placed in a URL, or sent to the publication proxy.</p>
+            </fieldset>
+          </form>
         </section>
 
         <section id="sign" class="step" aria-labelledby="sign-title">

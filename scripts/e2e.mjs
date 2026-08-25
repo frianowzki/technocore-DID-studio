@@ -51,7 +51,9 @@ try {
       signatureLength: document.querySelector('#signature').textContent.length,
       requestStartsCorrectly: document.querySelector('#request-url').value.startsWith('https://technocore.chat/r/lobby/say-signed/did:key:z6Mk'),
     };
+    let fetchCalls = 0;
     window.fetch = async (_url, options = {}) => {
+      fetchCalls += 1;
       if (String(_url).includes('/api/feed')) {
         return new Response(JSON.stringify({
           updatedAt: '2026-08-25T09:02:00Z',
@@ -65,6 +67,36 @@ try {
       const seq = sent.room === 'lobby' ? 42 : 84;
       return new Response(JSON.stringify({ room: sent.room, seq, timestamp: '2026-08-25T08:00:00Z', did, nonce: sent.nonce, text: sent.text }), { status: 200, headers: { 'content-type': 'application/json' } });
     };
+    let seedBackupBlob;
+    let seedBackupName = '';
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalSeedAnchorClick = HTMLAnchorElement.prototype.click;
+    URL.createObjectURL = (blob) => { seedBackupBlob = blob; return 'blob:e2e-seed-backup'; };
+    HTMLAnchorElement.prototype.click = function () { seedBackupName = this.download; };
+    const fetchesBeforeSeedBackup = fetchCalls;
+    set('#seed-backup-passphrase', 'separate seed recovery passphrase');
+    set('#seed-backup-confirmation', 'separate seed recovery passphrase');
+    document.querySelector('#seed-backup-check').checked = true;
+    document.querySelector('#seed-backup-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 900));
+    const seedBackupNetworkRequests = fetchCalls - fetchesBeforeSeedBackup;
+    const seedBackupText = await seedBackupBlob.text();
+    const seedBackupJson = JSON.parse(seedBackupText);
+    URL.createObjectURL = originalCreateObjectURL;
+    HTMLAnchorElement.prototype.click = originalSeedAnchorClick;
+
+    document.querySelector('#switch-identity').click();
+    const seedBackupDisabledAfterLock = document.querySelector('#seed-backup-fieldset').disabled;
+    const seedBackupFile = new File([seedBackupText], seedBackupName, { type: 'application/json' });
+    const transfer = new DataTransfer();
+    transfer.items.add(seedBackupFile);
+    document.querySelector('#backup-file').files = transfer.files;
+    set('#restore-passphrase', 'separate seed recovery passphrase');
+    document.querySelector('#restore-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 900));
+    const restoredSeedBackupDid = document.querySelector('#did-value').textContent;
+    const seedBackupEnabledAfterRestore = !document.querySelector('#seed-backup-fieldset').disabled;
+
     set('#introduction-text', 'I build small public tools.');
     document.querySelector('#introduction-form').requestSubmit();
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -100,6 +132,15 @@ try {
       initialRecordCount,
       identityReady: !document.querySelector('#identity-ready').hidden,
       signEnabled: !document.querySelector('#sign-fieldset').disabled,
+      seedBackupName,
+      seedBackupFormat: seedBackupJson.format,
+      seedBackupDid: seedBackupJson.did,
+      seedBackupHasPlainSeedField: Object.hasOwn(seedBackupJson, 'seed'),
+      seedBackupContainsPassphrase: seedBackupText.includes('separate seed recovery passphrase'),
+      seedBackupNetworkRequests,
+      seedBackupDisabledAfterLock,
+      seedBackupEnabledAfterRestore,
+      restoredSeedBackupDid,
       ...signedOnly,
       publicationVisible: !document.querySelector('#publication-result').hidden,
       preparedIntroductionRoom,
@@ -134,6 +175,12 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 250));
   const screenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
   await writeFile('artifacts/record-board.png', Buffer.from(screenshot.data, 'base64'));
+  await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 1000, deviceScaleFactor: 1, mobile: true }, sessionId);
+  await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('#seed-backup-form').scrollIntoView({block:'start'}); window.scrollBy(0, -110)" }, sessionId);
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const seedBackupMobileScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
+  await writeFile('artifacts/seed-backup-mobile.png', Buffer.from(seedBackupMobileScreenshot.data, 'base64'));
+  await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false }, sessionId);
   await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('#introduction').scrollIntoView({block:'start'})" }, sessionId);
   await new Promise((resolve) => setTimeout(resolve, 250));
   const introductionScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
@@ -150,7 +197,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 250));
   const feedScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
   await writeFile('artifacts/live-feed.png', Buffer.from(feedScreenshot.data, 'base64'));
-  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.signEnabled && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true';
+  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.signEnabled && value.seedBackupName.startsWith('technocore-seed-backup-') && value.seedBackupName.endsWith('.json') && value.seedBackupFormat === 'technocore-seed-backup' && value.seedBackupDid === value.did && value.seedBackupHasPlainSeedField === false && value.seedBackupContainsPassphrase === false && value.seedBackupNetworkRequests === 0 && value.seedBackupDisabledAfterLock && value.seedBackupEnabledAfterRestore && value.restoredSeedBackupDid === value.did && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true';
   console.log(JSON.stringify(value, null, 2));
   if (!passed) process.exitCode = 1;
 } finally {

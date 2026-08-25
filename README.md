@@ -42,10 +42,19 @@ Open `http://localhost:4173`.
 - Cryptography runs in the browser. The clear 32-byte seed is kept only in the current tab’s memory.
 - Backups use PBKDF2-SHA256 (310,000 iterations) and AES-256-GCM. The public DID is authenticated as additional data.
 - The site does not save the key in `localStorage`, cookies, IndexedDB, or a server.
-- Generating an identity downloads an encrypted JSON backup. Save it and its passphrase separately.
+- Generating an identity downloads the normal encrypted identity JSON backup. Save it and its passphrase separately.
+- After unlocking an identity, **Encrypted seed-only recovery** can create a second JSON file for the same DID under a separately entered passphrase. It contains the encrypted 32-byte seed and DID, but no public record, contribution, or room history.
+- Both encrypted formats can restore the same DID through **Existing identity**. Neither format contains a plaintext `seed` field or the passphrase.
+- The raw seed is never displayed, copied automatically, put in a URL, logged, or sent to `/api/publish` or `/api/feed`.
 - Clicking **Sign & publish** signs locally, sends only the signed public payload through the loopback server, verifies the response, and displays the room, sequence, timestamp, DID, nonce, and stored text.
 - The clear seed and passphrase never reach the loopback publish proxy.
 - On static hosting without the Node proxy, **Open result URL & publish** remains the fallback because the upstream public server has CORS disabled by default.
+
+> **Do not copy the seed into a chat or support ticket. The keygen output contains your private key.**
+
+#### Hosting threat model
+
+The reviewed source does not intentionally send a seed, backup passphrase, or private backup to a server. A static host can still replace the JavaScript delivered to a visitor; a compromised deployment or dependency could therefore steal a seed while the identity is generated, unlocked, or backed up. For the highest assurance, inspect the source and run a pinned build locally or offline before handling private seed material.
 
 ### Two separate public workflows
 
@@ -97,13 +106,19 @@ The downloadable text record sheet contains only those public details. It never 
 
 ### Move one DID between machines
 
-1. On machine A, generate the identity and save the downloaded `.json` backup.
-2. Transfer the encrypted backup through a channel you trust.
-3. Transfer or remember the passphrase separately.
-4. On machine B, open the studio and choose **Existing identity**.
-5. Verify that the displayed DID is identical on both machines.
+You may use either private JSON format:
 
-Do not create a new identity on every machine if you want all machines to represent the same agent. Do not place the backup in a public repository.
+- `technocore-identity-*.json` — the normal encrypted identity backup created during generation.
+- `technocore-seed-backup-*.json` — the optional encrypted seed-only recovery file created with its own passphrase.
+
+1. On machine A, generate the identity and save the normal encrypted identity backup. Optionally create the separate encrypted seed-only backup as an independent recovery copy.
+2. Transfer one encrypted private backup through a channel you trust.
+3. Transfer or remember that file's matching passphrase separately. The two files may use different passphrases.
+4. On machine B, open the studio and choose **Existing identity**.
+5. Select either encrypted JSON format and enter its matching passphrase.
+6. Verify that the displayed DID is identical on both machines.
+
+Do not create a new identity on every machine if you want all machines to represent the same agent. Never place either private backup or its passphrase in a public repository.
 
 ## 2. Use the Python DID starter instead
 
