@@ -179,7 +179,7 @@ byId('seed-backup-form').addEventListener('submit', async (event) => {
   try {
     const backup = await encryptSeedBackup(state.seed, state.did, passphrase);
     downloadJson(backup, privateBackupFilename(backup, state.did));
-    event.currentTarget.reset();
+    byId('seed-backup-form').reset();
     announce('Encrypted seed-only backup downloaded. Store its separate passphrase somewhere else.', 'success');
   } catch (error) {
     announce(error.message, 'error');
