@@ -41,6 +41,13 @@ function publicationLabel(record) {
   return record ? `${record.room} #${record.seq}` : '—';
 }
 
+function updateOwnedRecord(kind, record) {
+  byId(`owned-${kind}-status`).textContent = record ? `Published #${record.seq}` : 'Not published in this tab';
+  byId(`owned-${kind}-seq`).textContent = record ? String(record.seq) : '—';
+  byId(`owned-${kind}-nonce`).textContent = record?.nonce || '—';
+  byId(`owned-${kind}-text`).textContent = record?.text || '—';
+}
+
 function updateRecordBoard() {
   const data = {
     did: state.did,
@@ -55,6 +62,9 @@ function updateRecordBoard() {
   byId('record-lobby').textContent = publicationLabel(state.records.lobby);
   byId('record-contribution').textContent = state.contribution ? `${state.contribution.formatLabel}: ${state.contribution.url}` : '—';
   byId('record-technocore').textContent = publicationLabel(state.records.technocore);
+  byId('owned-did').textContent = state.did || '—';
+  updateOwnedRecord('introduction', state.records.lobby);
+  updateOwnedRecord('contribution', state.records.technocore);
   byId('backup-did').textContent = state.did || '—';
   byId('backup-lobby-seq').textContent = state.records.lobby ? String(state.records.lobby.seq) : '—';
   byId('backup-contribution').textContent = state.contribution ? `${state.contribution.formatLabel}: ${state.contribution.url}` : '—';

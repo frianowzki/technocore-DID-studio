@@ -243,7 +243,25 @@
 
         <section id="live" class="step live-section" aria-labelledby="live-title">
           <header class="step-head"><span>06</span><div><p>Two-room monitor</p><h2 id="live-title">Introductions and contributions</h2></div></header>
-          <div class="feed-shell">
+          <section id="owned-records" class="owned-records" aria-labelledby="owned-records-title">
+            <div class="owned-records-head">
+              <div><p class="record-kicker">Active-tab evidence</p><h3 id="owned-records-title">Your DID records</h3></div>
+              <code id="owned-did">—</code>
+            </div>
+            <div class="owned-record-grid">
+              <article class="owned-record owned-introduction">
+                <div class="owned-record-title"><div><p class="record-kicker">Introduction</p><h4>Lobby record</h4></div><span id="owned-introduction-status">Not published in this tab</span></div>
+                <dl><dt>Room</dt><dd id="owned-introduction-room">lobby</dd><dt>Sequence</dt><dd id="owned-introduction-seq">—</dd><dt>Nonce</dt><dd id="owned-introduction-nonce">—</dd><dt>Stored text</dt><dd id="owned-introduction-text">—</dd></dl>
+              </article>
+              <article class="owned-record owned-contribution">
+                <div class="owned-record-title"><div><p class="record-kicker">Contribution</p><h4>Technocore record</h4></div><span id="owned-contribution-status">Not published in this tab</span></div>
+                <dl><dt>Room</dt><dd id="owned-contribution-room">technocore</dd><dt>Sequence</dt><dd id="owned-contribution-seq">—</dd><dt>Nonce</dt><dd id="owned-contribution-nonce">—</dd><dt>Stored text</dt><dd id="owned-contribution-text">—</dd></dl>
+              </article>
+            </div>
+            <p class="owned-records-note">These verified records belong to the identity active in this tab. They are kept separate from the anonymous, untrusted public feed below and are cleared when you unlock a different identity or close the tab.</p>
+          </section>
+          <div class="feed-shell" aria-labelledby="public-feed-title">
+            <div class="public-feed-heading"><p class="record-kicker">Public network</p><h3 id="public-feed-title">Public live feed</h3></div>
             <div class="feed-toolbar">
               <div class="feed-health"><span id="feed-dot" class="feed-dot" aria-hidden="true"></span><div><strong id="feed-status">Connecting…</strong><small id="feed-updated">Waiting for first update</small></div></div>
               <button id="refresh-feed" class="secondary" type="button">Refresh now</button>
