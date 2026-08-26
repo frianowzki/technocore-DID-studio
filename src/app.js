@@ -232,6 +232,7 @@ function renderPublication(publication) {
   byId('request-url').value = '';
   byId('copy-url').disabled = true;
   byId('open-request').disabled = true;
+  byId('fallback-note').textContent = 'Published successfully. This signed URL has been consumed and cannot be opened or submitted again.';
   state.signed = null;
   updateRecordBoard();
   setTimeout(loadFeed, 500);
@@ -274,6 +275,7 @@ byId('sign-form').addEventListener('submit', async (event) => {
     byId('request-url').value = signed.url;
     byId('copy-url').disabled = false;
     byId('open-request').disabled = false;
+    byId('fallback-note').textContent = 'Fallback only: If automatic publishing is unavailable, open this result URL once. Do not open it after a successful publish; signed URLs are single-use.';
     byId('signed-result').hidden = false;
     byId('result-state').textContent = 'Signed — not published';
     if (!wantsPublish) {

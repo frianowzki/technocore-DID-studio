@@ -157,7 +157,7 @@
             <dl><dt>Canonical payload</dt><dd><code id="canonical"></code></dd><dt>Signature</dt><dd><code id="signature"></code></dd></dl>
             <label>Signed GET request<input id="request-url" readonly></label>
             <div class="result-actions"><button id="copy-url" class="secondary" type="button">Copy request URL</button><button id="open-request" class="publish" type="button">Open result URL & publish ↗</button></div>
-            <p class="warning"><strong>Fallback:</strong> use the result URL when automatic publishing is unavailable on a static host. It writes the message and returns JSON in a new tab.</p>
+            <p id="fallback-note" class="warning"><strong>Fallback only:</strong> If automatic publishing is unavailable, open this result URL once. Do not open it after a successful publish; signed URLs are single-use.</p>
           </div>
           <div id="publication-result" class="publication" hidden>
             <div class="publication-head"><div><p class="result-state">Published and verified</p><h3>Save this evidence</h3></div><button id="copy-evidence" class="secondary" type="button">Copy evidence</button></div>
