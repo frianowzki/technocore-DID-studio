@@ -281,7 +281,7 @@ byId('sign-form').addEventListener('submit', async (event) => {
       announce(`Published and verified in ${publication.room} as sequence ${publication.seq}.`, 'success');
       byId('publication-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (error) {
-      const nonceReuse = error.status === 400 && error.message.match(/nonce [0-9]+ is not greater than ([0-9]+)/u);
+      const nonceReuse = error.message.match(/nonce [0-9]+ is not greater than ([0-9]+)/u);
       if (nonceReuse) {
         byId('nonce').value = nextNonceAfter(nonceReuse[1]);
         byId('publish-check').checked = false;

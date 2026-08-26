@@ -94,7 +94,7 @@ try {
       const sent = JSON.parse(options.body);
       if (sent.room === 'lobby' && rejectedNonce === null) {
         rejectedNonce = sent.nonce;
-        return new Response(JSON.stringify({ error: 'Technocore returned HTTP 400: nonce ' + sent.nonce + ' is not greater than ' + sent.nonce + ', the last one this key used in /r/lobby — a signed URL is single-use, so count up' }), { status: 400, headers: { 'content-type': 'application/json' } });
+        return new Response(JSON.stringify({ error: 'Technocore returned HTTP 400: nonce ' + sent.nonce + ' is not greater than ' + sent.nonce + ', the last one this key used in /r/lobby — a signed URL is single-use, so count up' }), { status: 502, headers: { 'content-type': 'application/json' } });
       }
       if (sent.room === 'lobby' && BigInt(sent.nonce) <= BigInt(rejectedNonce)) {
         return new Response(JSON.stringify({ error: 'nonce was reused' }), { status: 400, headers: { 'content-type': 'application/json' } });
