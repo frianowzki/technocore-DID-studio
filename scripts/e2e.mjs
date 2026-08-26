@@ -79,6 +79,7 @@ try {
       requestStartsCorrectly: document.querySelector('#request-url').value.startsWith('https://technocore.chat/r/lobby/say-signed/did:key:z6Mk'),
     };
     let fetchCalls = 0;
+    let rejectedNonce = null;
     window.fetch = async (_url, options = {}) => {
       fetchCalls += 1;
       if (String(_url).includes('/api/feed')) {
@@ -91,6 +92,13 @@ try {
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       const sent = JSON.parse(options.body);
+      if (sent.room === 'lobby' && rejectedNonce === null) {
+        rejectedNonce = sent.nonce;
+        return new Response(JSON.stringify({ error: 'Technocore returned HTTP 400: nonce ' + sent.nonce + ' is not greater than ' + sent.nonce + ', the last one this key used in /r/lobby — a signed URL is single-use, so count up' }), { status: 400, headers: { 'content-type': 'application/json' } });
+      }
+      if (sent.room === 'lobby' && BigInt(sent.nonce) <= BigInt(rejectedNonce)) {
+        return new Response(JSON.stringify({ error: 'nonce was reused' }), { status: 400, headers: { 'content-type': 'application/json' } });
+      }
       const seq = sent.room === 'lobby' ? 42 : 84;
       return new Response(JSON.stringify({ room: sent.room, seq, timestamp: '2026-08-25T08:00:00Z', did, nonce: sent.nonce, text: sent.text }), { status: 200, headers: { 'content-type': 'application/json' } });
     };
@@ -131,7 +139,13 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100));
     const preparedIntroductionRoom = document.querySelector('#room').value;
     const preparedIntroductionMessage = document.querySelector('#message').value;
-    set('#nonce', '1720000000001');
+    set('#nonce', '1787723337906');
+    document.querySelector('#publish-check').checked = true;
+    document.querySelector('#sign-form').requestSubmit(document.querySelector('#sign-publish-button'));
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const nonceAfterRejection = document.querySelector('#nonce').value;
+    const rejectedSignedResultHidden = document.querySelector('#signed-result').hidden;
+    const rejectedStatus = document.querySelector('#status').textContent;
     document.querySelector('#publish-check').checked = true;
     document.querySelector('#sign-form').requestSubmit(document.querySelector('#sign-publish-button'));
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -200,6 +214,9 @@ try {
       publicationVisible: !document.querySelector('#publication-result').hidden,
       preparedIntroductionRoom,
       preparedIntroductionMessage,
+      nonceAfterRejection,
+      rejectedSignedResultHidden,
+      rejectedStatus,
       introductionFilterLabel: document.querySelector('[data-feed-filter="introduction"]').textContent,
       contributionFilterLabel: document.querySelector('[data-feed-filter="contribution"]').textContent,
       lobbyRecord,
@@ -330,7 +347,7 @@ npm run serve`;
   const expectedHeroLede = 'Generate an encrypted did:key, move it across machines, and sign valid Technocore messages—without handing your private seed to a wallet, platform, or server.';
   const expectedHeroStatement = 'No wallet handshake. No account gate. No silent publish. Nothing goes public until you review it and say so. No airdrop bait. No borrowed trust. Just cryptography you control.';
   const expectedHeroStrongTexts = ['No middleman.', 'private seed', 'No wallet handshake. No account gate. No silent publish.', 'No airdrop bait. No borrowed trust. Just cryptography you control.'];
-  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.recoveryBadge === 'No server recovery' && value.signEnabled && value.seedBackupName.startsWith('technocore-seed-backup-') && value.seedBackupName.endsWith('.json') && value.seedBackupFormat === 'technocore-seed-backup' && value.seedBackupDid === value.did && value.seedBackupHasPlainSeedField === false && value.seedBackupContainsPassphrase === false && value.seedBackupNetworkRequests === 0 && value.seedBackupStatus === 'Encrypted seed-only backup downloaded. Store its separate passphrase somewhere else.' && value.seedBackupFormReset && value.seedBackupDisabledAfterLock && value.seedBackupEnabledAfterRestore && value.restoredSeedBackupDid === value.did && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true' && value.workspaceMaxWidth === 'none' && value.firstRailLinkLeft <= 64 && value.scrollEffectsEnabled && value.activeRailHref === '#run' && value.visibleStepCount > 0 && value.windowsCommand === expectedWindowsCommand && value.macCommand === expectedPosixCommand && value.linuxCommand === expectedPosixCommand && value.completeGuideLinkPresent === false && value.topbarText === '' && value.brandPresent === false && value.eyebrowPresent === false && value.heroTitle === 'Your key. Your identity. No middleman.' && value.heroLede === expectedHeroLede && value.heroStatement === expectedHeroStatement && JSON.stringify(value.heroStrongTexts) === JSON.stringify(expectedHeroStrongTexts) && value.localBadgePresent === false && value.githubHref === 'https://github.com/frianowzki/technocore-DID-studio' && value.githubVisibleText === '' && value.githubHasLogo && value.githubLabel === 'View Frianowzki’s Technocore DID Studio on GitHub' && value.footerText === '© 2026 Frianowzki - Built for Technocore / Flop Labs';
+  const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.recoveryBadge === 'No server recovery' && value.signEnabled && value.seedBackupName.startsWith('technocore-seed-backup-') && value.seedBackupName.endsWith('.json') && value.seedBackupFormat === 'technocore-seed-backup' && value.seedBackupDid === value.did && value.seedBackupHasPlainSeedField === false && value.seedBackupContainsPassphrase === false && value.seedBackupNetworkRequests === 0 && value.seedBackupStatus === 'Encrypted seed-only backup downloaded. Store its separate passphrase somewhere else.' && value.seedBackupFormReset && value.seedBackupDisabledAfterLock && value.seedBackupEnabledAfterRestore && value.restoredSeedBackupDid === value.did && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && BigInt(value.nonceAfterRejection) > 1787723337906n && value.rejectedSignedResultHidden && value.rejectedStatus.includes('Nonce rejected as already used') && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true' && value.workspaceMaxWidth === 'none' && value.firstRailLinkLeft <= 64 && value.scrollEffectsEnabled && value.activeRailHref === '#run' && value.visibleStepCount > 0 && value.windowsCommand === expectedWindowsCommand && value.macCommand === expectedPosixCommand && value.linuxCommand === expectedPosixCommand && value.completeGuideLinkPresent === false && value.topbarText === '' && value.brandPresent === false && value.eyebrowPresent === false && value.heroTitle === 'Your key. Your identity. No middleman.' && value.heroLede === expectedHeroLede && value.heroStatement === expectedHeroStatement && JSON.stringify(value.heroStrongTexts) === JSON.stringify(expectedHeroStrongTexts) && value.localBadgePresent === false && value.githubHref === 'https://github.com/frianowzki/technocore-DID-studio' && value.githubVisibleText === '' && value.githubHasLogo && value.githubLabel === 'View Frianowzki’s Technocore DID Studio on GitHub' && value.footerText === '© 2026 Frianowzki - Built for Technocore / Flop Labs';
   const expectedContributionPrinciples = [
     'Build the missing piece Create the guide, tool, translation, or explanation you wish had existed when you arrived.',
     'Make it worth opening Choose one format and do it with care. Clarity beats recycled hype every time.',

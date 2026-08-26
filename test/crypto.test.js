@@ -9,6 +9,7 @@ import {
   encryptIdentity,
   encryptSeedBackup,
   normalizeText,
+  nextNonceAfter,
   signMessage,
   signedMessageUrl,
 } from '../src/crypto.js';
@@ -28,6 +29,11 @@ test('creates the canonical Ed25519 did:key used by Technocore', async () => {
 test('normalizes exactly the invisible categories and trims ends', () => {
   assert.equal(normalizeText('  hello\nworld\u200D!  '), 'hello world !');
   assert.throws(() => normalizeText('\n\u200D'), /no visible text/i);
+});
+
+test('advances a nonce beyond both the clock and the rejected value', () => {
+  assert.equal(nextNonceAfter('1787723337906', 1787723337906), '1787723337907');
+  assert.equal(nextNonceAfter('100', 200), '200');
 });
 
 test('signs the official room|nonce|normalized-text payload', async () => {

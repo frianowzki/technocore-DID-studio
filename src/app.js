@@ -5,6 +5,7 @@ import {
   encryptSeedBackup,
   generateSeed,
   nextNonce,
+  nextNonceAfter,
   signMessage,
   signedMessageUrl,
 } from './crypto.js';
@@ -280,7 +281,14 @@ byId('sign-form').addEventListener('submit', async (event) => {
       announce(`Published and verified in ${publication.room} as sequence ${publication.seq}.`, 'success');
       byId('publication-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (error) {
-      if (error.status === 404) {
+      const nonceReuse = error.status === 400 && error.message.match(/nonce [0-9]+ is not greater than ([0-9]+)/u);
+      if (nonceReuse) {
+        byId('nonce').value = nextNonceAfter(nonceReuse[1]);
+        byId('publish-check').checked = false;
+        byId('signed-result').hidden = true;
+        state.signed = null;
+        announce('Nonce rejected as already used. The old signed URL is now invalidated; review the room, then sign again with the fresh nonce.', 'error');
+      } else if (error.status === 404) {
         announce('Automatic publishing is unavailable on this static host. The message is still only signed; use “Open result URL & publish”.', 'error');
       } else {
         announce(`Publication was not confirmed: ${error.message} Check the room before retrying or using the fallback URL.`, 'error');

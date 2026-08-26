@@ -85,6 +85,13 @@ export function nextNonce() {
   return String(Date.now());
 }
 
+export function nextNonceAfter(previousNonce, now = Date.now()) {
+  const previous = BigInt(validateNonce(previousNonce));
+  const clock = BigInt(validateNonce(now));
+  const candidate = clock > previous ? clock : previous + 1n;
+  return validateNonce(candidate);
+}
+
 export async function signMessage(seedHex, room, nonce, text) {
   const validRoom = validateRoom(room);
   const validNonce = validateNonce(nonce);
