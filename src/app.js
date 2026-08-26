@@ -228,7 +228,11 @@ function renderPublication(publication) {
   byId('published-nonce').textContent = publication.nonce;
   byId('published-text').textContent = publication.text;
   byId('publication-result').hidden = false;
-  byId('result-state').textContent = 'Signed and published';
+  byId('result-state').textContent = 'Signed and published — URL consumed';
+  byId('request-url').value = '';
+  byId('copy-url').disabled = true;
+  byId('open-request').disabled = true;
+  state.signed = null;
   updateRecordBoard();
   setTimeout(loadFeed, 500);
 }
@@ -268,6 +272,8 @@ byId('sign-form').addEventListener('submit', async (event) => {
     byId('canonical').textContent = `${room}|${signed.nonce}|${signed.text}`;
     byId('signature').textContent = signed.signature;
     byId('request-url').value = signed.url;
+    byId('copy-url').disabled = false;
+    byId('open-request').disabled = false;
     byId('signed-result').hidden = false;
     byId('result-state').textContent = 'Signed — not published';
     if (!wantsPublish) {
