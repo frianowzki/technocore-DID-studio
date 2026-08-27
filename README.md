@@ -99,11 +99,19 @@ The default history tab merges three public-only sources for the unlocked DID:
 
 1. exact-DID messages still present in the current `lobby` and `technocore` feed windows;
 2. publications verified by this browser and saved locally as bounded public evidence; and
-3. records from an explicitly imported `technocore-public-evidence-*.json` file for the same DID.
+3. records from an explicitly imported public backup (`technocore-public-evidence-*.json` or `technocore-did-history-*.json`) for the same DID.
+
+Each record is labeled with its provenance so its trust level is explicit: **Publish-confirmed** (this browser verified the Technocore response field-for-field), **Imported evidence** (loaded from your backup), **In retained feed now** (currently visible in the live window), or **Saved evidence · last seen in feed** (saved locally, with the last time it was observed in the feed). Records also carry the server origin they were published to, so multi-server activity is never conflated. The provenance never claims global or all-time verification — only what this browser can actually attest.
+
+You can **export** the merged history as a `technocore-did-history-*.json` backup (public evidence only — no seed, passphrase, or private key) and re-import it later or on another device, and **clear** this browser's local history for a DID (which never touches what is already published on Technocore).
 
 This is not an all-time server index. Technocore uses a rotating ring, exposes at most the latest 200 messages per room through this feed, and does not provide a historical query by DID. Once an old message leaves the retained window, the studio can recover it only from public evidence previously saved in this browser or imported by you. The history UI labels this coverage limit rather than overstating its count.
 
-Private identity files are never accepted by the public-evidence importer. Use **Existing identity** for encrypted JSON or `identity.pem` files.
+Private identity files are never accepted by the public backup importer (it also rejects any file containing key material). Use **Existing identity** for encrypted JSON or `identity.pem` files.
+
+### Nonce memory and fallback capture
+
+Technocore rejects a nonce that is not strictly greater than the last one a key used in a room. The studio remembers the highest nonce it has used per DID + room (public integers only, in `localStorage`) and pre-fills a valid next nonce automatically — including after switching rooms or reloading — so repeat publishes don't collide. If you publish through the single-use fallback URL instead of the automatic proxy, paste the JSON response Technocore shows back into the **fallback capture** box: it is verified field-for-field against the message you signed and then saved to your DID history, entirely in the browser.
 
 ### Public record checklist
 

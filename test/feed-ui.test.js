@@ -7,10 +7,16 @@ const messages = [
   { kind: 'contribution', seq: 2 },
 ];
 
-test('filters feed by introductions or contributions', () => {
-  assert.deepEqual(filterFeed(messages, 'all').map((item) => item.seq), [1, 2]);
-  assert.deepEqual(filterFeed(messages, 'introduction').map((item) => item.seq), [1]);
-  assert.deepEqual(filterFeed(messages, 'contribution').map((item) => item.seq), [2]);
+test('filters feed by introductions, contributions, or the active DID', () => {
+  const withAuthors = [
+    { kind: 'introduction', seq: 1, from: 'did:key:mine' },
+    { kind: 'contribution', seq: 2, from: 'did:key:other' },
+  ];
+  assert.deepEqual(filterFeed(withAuthors, 'all').map((item) => item.seq), [1, 2]);
+  assert.deepEqual(filterFeed(withAuthors, 'introduction').map((item) => item.seq), [1]);
+  assert.deepEqual(filterFeed(withAuthors, 'contribution').map((item) => item.seq), [2]);
+  assert.deepEqual(filterFeed(withAuthors, 'mine', 'did:key:mine').map((item) => item.seq), [1]);
+  assert.deepEqual(filterFeed(withAuthors, 'mine', null), []); // no active DID -> nothing is "mine"
 });
 
 test('formats authors and relative timestamps compactly', () => {

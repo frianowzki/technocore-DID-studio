@@ -33,7 +33,7 @@ test('publishes with POST and returns verified room evidence', async () => {
     did: payload.did, sig: payload.signature, nonce: payload.nonce, text: payload.text,
   });
   assert.deepEqual(result, {
-    room: 'lobby', seq: 42, timestamp: '2026-08-25T08:00:00Z', did: payload.did, nonce: '1720000000000', text: 'hello world',
+    room: 'lobby', seq: 42, timestamp: '2026-08-25T08:00:00Z', did: payload.did, nonce: '1720000000000', text: 'hello world', origin: 'https://technocore.chat',
   });
 });
 

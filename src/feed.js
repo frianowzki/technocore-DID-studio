@@ -1,4 +1,5 @@
-export function filterFeed(messages, filter) {
+export function filterFeed(messages, filter, activeDid = null) {
+  if (filter === 'mine') return activeDid ? messages.filter((message) => message.from === activeDid) : [];
   return filter === 'all' ? messages : messages.filter((message) => message.kind === filter);
 }
 

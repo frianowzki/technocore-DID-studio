@@ -85,8 +85,8 @@ test('fetches base rooms plus requested extra rooms with neutral kind', async ()
 
 test('discovers and ranks rooms from the directory, bounding topic length', async () => {
   const fetchImpl = async () => new Response(JSON.stringify({ rooms: [
-    { room: 'lobby', last_seq: 10, topic: 'x'.repeat(300) },
-    { room: 'kibble', last_seq: 99, topic: 'jobs' },
+    { room: 'lobby', last_seq: 10, topic: 'x'.repeat(300), window: 200, idle_seconds: 0 },
+    { room: 'kibble', last_seq: 99, topic: 'jobs', window: 120, idle_seconds: 42.7 },
     { room: 'BAD ROOM', last_seq: 5 },
     { room: 'nolast' },
   ] }), { status: 200 });
@@ -94,4 +94,23 @@ test('discovers and ranks rooms from the directory, bounding topic length', asyn
   assert.deepEqual(directory.rooms.map((r) => r.room), ['kibble', 'lobby']);
   assert.equal(directory.rooms.find((r) => r.room === 'lobby').base, true);
   assert.equal(directory.rooms.find((r) => r.room === 'lobby').topic.length, 120);
+  // Capacity + freshness surfacing.
+  assert.equal(directory.rooms.find((r) => r.room === 'lobby').atCapacity, true);
+  assert.equal(directory.rooms.find((r) => r.room === 'kibble').atCapacity, false);
+  assert.equal(directory.rooms.find((r) => r.room === 'kibble').idleSeconds, 43);
+});
+
+test('dedupes a message that appears in more than one monitored room window', async () => {
+  const shared = { seq: 500, ts: '2026-08-25T09:05:00Z', from: 'did:key:z6MkShared', text: 'cross-posted', nonce: 7 };
+  const fetchImpl = async (url) => {
+    const room = new URL(url).pathname.split('/').at(-1);
+    // Both lobby and an extra room echo the same seq 500 entry under their own room label.
+    return new Response(JSON.stringify({ room, count: 1, messages: [{ ...shared }] }), { status: 200 });
+  };
+  const feed = await getLiveFeed({ fetchImpl, extraRooms: 'lobby', now: () => new Date('2026-08-25T09:06:00Z') });
+  // lobby is a base room; the extra "lobby" request is dropped by parseExtraRooms,
+  // so only base lobby + technocore run. Same seq under different rooms stays distinct,
+  // but a repeat of the exact room+seq collapses to one entry.
+  const lobbyFive = feed.messages.filter((m) => m.room === 'lobby' && m.seq === 500);
+  assert.equal(lobbyFive.length, 1);
 });

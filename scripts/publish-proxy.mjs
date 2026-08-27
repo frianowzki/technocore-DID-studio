@@ -53,5 +53,5 @@ export async function proxyPublish(input, fetcher = fetch) {
   if (data?.room !== payload.room || posted?.from !== payload.did || posted?.text !== payload.text || !nonceMatches || !seqValid || typeof posted.ts !== 'string') {
     throw new Error('Technocore response did not match the signed message; publication cannot be confirmed.');
   }
-  return { room: data.room, seq: posted.seq, timestamp: posted.ts, did: posted.from, nonce: String(posted.nonce), text: posted.text };
+  return { room: data.room, seq: posted.seq, timestamp: posted.ts, did: posted.from, nonce: String(posted.nonce), text: posted.text, origin: payload.baseUrl };
 }

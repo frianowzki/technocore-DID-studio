@@ -65,8 +65,14 @@ async function fetchRoom({ room, kind }, fetchImpl) {
 export async function getLiveFeed({ fetchImpl = fetch, now = () => new Date(), extraRooms = [] } = {}) {
   const entries = [...BASE_ROOMS, ...parseExtraRooms(Array.isArray(extraRooms) ? extraRooms.join(',') : extraRooms).map((room) => ({ room, kind: kindForRoom(room) }))];
   const batches = await Promise.all(entries.map((entry) => fetchRoom(entry, fetchImpl)));
-  const messages = batches.flat().sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp) || b.seq - a.seq);
-  return { updatedAt: now().toISOString(), rooms: entries.map((entry) => entry.room), messages };
+  // Dedupe across rooms by room+seq: a message can surface in more than one
+  // monitored room window, and we never want it listed twice.
+  const seen = new Map();
+  for (const message of batches.flat()) {
+    seen.set(`${message.room}:${message.seq}`, message);
+  }
+  const messages = [...seen.values()].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp) || b.seq - a.seq);
+  return { updatedAt: now().toISOString(), origin: ORIGIN, rooms: entries.map((entry) => entry.room), messages };
 }
 
 // Read-only proxy of GET /rooms so the browser can discover selectable rooms
@@ -83,13 +89,21 @@ export async function getRoomDirectory({ fetchImpl = fetch, now = () => new Date
   if (!data || !Array.isArray(data.rooms)) throw new Error('Technocore returned a malformed room directory.');
   const rooms = data.rooms
     .filter((entry) => NAME_RE.test(entry?.room) && Number.isInteger(entry?.last_seq))
-    .map((entry) => ({
-      room: entry.room,
-      lastSeq: entry.last_seq,
-      topic: typeof entry.topic === 'string' ? entry.topic.slice(0, 120) : null,
-      base: BASE_ROOM_NAMES.has(entry.room),
-    }))
+    .map((entry) => {
+      // Technocore reports a fixed retained window; a room whose window is at or
+      // above the ceiling is effectively full and scrolls fastest.
+      const windowSize = Number.isInteger(entry.window) ? entry.window : null;
+      return {
+        room: entry.room,
+        lastSeq: entry.last_seq,
+        topic: typeof entry.topic === 'string' ? entry.topic.slice(0, 120) : null,
+        idleSeconds: Number.isFinite(entry.idle_seconds) ? Math.max(0, Math.round(entry.idle_seconds)) : null,
+        window: windowSize,
+        atCapacity: windowSize !== null && windowSize >= ROOM_ENTRY_LIMIT,
+        base: BASE_ROOM_NAMES.has(entry.room),
+      };
+    })
     .sort((a, b) => b.lastSeq - a.lastSeq)
     .slice(0, limit);
-  return { updatedAt: now().toISOString(), rooms };
+  return { updatedAt: now().toISOString(), origin: ORIGIN, rooms };
 }

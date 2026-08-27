@@ -71,6 +71,7 @@
               <label>Confirm passphrase<input id="confirm-passphrase" type="password" minlength="12" autocomplete="new-password" required></label>
               <label class="check"><input id="safety-check" type="checkbox" required><span>I will save the downloaded backup and keep its passphrase separately. I will never use a wallet seed phrase here.</span></label>
               <button id="generate-button" class="primary" type="submit">Generate encrypted identity</button>
+              <p class="did-proof-note fine-print">A DID proves you control one Ed25519 key — nothing more. It is <strong>not</strong> proof of personhood, honesty, wallet ownership, reward or airdrop eligibility, or that you are a separate participant. Create <strong>one</strong> identity and use it honestly.</p>
             </form>
 
             <form id="restore-form" class="form-block secondary-block">
@@ -140,7 +141,13 @@
                 <ol id="mnemonic-words" class="mnemonic-words" hidden></ol>
                 <div class="mnemonic-actions" hidden id="mnemonic-actions">
                   <button id="copy-mnemonic" class="small-button" type="button">Copy phrase</button>
+                  <button id="verify-mnemonic" class="small-button" type="button">Verify I wrote it down</button>
                   <button id="hide-mnemonic" class="text-button" type="button">Hide</button>
+                </div>
+                <div id="mnemonic-verify-form" class="mnemonic-verify" hidden>
+                  <p class="fine-print">Confirm you copied it correctly: enter the requested words. This never leaves your browser.</p>
+                  <div id="mnemonic-verify-fields" class="mnemonic-verify-fields"></div>
+                  <button id="check-mnemonic" class="small-button" type="button">Check phrase</button>
                 </div>
               </div>
             </fieldset>
@@ -174,6 +181,12 @@
             <label>Signed GET request<input id="request-url" readonly></label>
             <div class="result-actions"><button id="copy-url" class="secondary" type="button">Copy request URL</button><button id="open-request" class="publish" type="button">Open result URL & publish ↗</button></div>
             <p id="fallback-note" class="warning"><strong>Fallback only:</strong> If automatic publishing is unavailable, open this result URL once. Do not open it after a successful publish; signed URLs are single-use.</p>
+            <details id="fallback-capture" class="fallback-capture">
+              <summary>Published via the fallback URL? Paste the JSON response to save it</summary>
+              <p class="fine-print">When you publish by opening the result URL, Technocore shows a JSON response in the new tab. Paste it here to record that publication in your DID history. Nothing is sent anywhere — it is parsed locally and matched against the message you just signed.</p>
+              <label>Technocore JSON response<textarea id="fallback-json" rows="4" autocomplete="off" spellcheck="false" placeholder='{"room":"lobby","posted":{"seq":…,"ts":"…","from":"did:key:…","nonce":…,"text":"…"}}'></textarea></label>
+              <button id="capture-fallback" class="secondary" type="button">Save fallback publication</button>
+            </details>
           </div>
           <div id="publication-result" class="publication" hidden>
             <div class="publication-head"><div><p class="result-state">Published and verified</p><h3>Save this evidence</h3></div><button id="copy-evidence" class="secondary" type="button">Copy evidence</button></div>
@@ -286,8 +299,12 @@
               </div>
             </div>
             <form id="evidence-import-form" class="history-import">
-              <label>Import an older public evidence backup <span>Public JSON only—never choose identity.pem here.</span><input id="evidence-file" type="file" accept="application/json,.json" required></label>
-              <button class="secondary" type="submit">Add evidence to this DID history</button>
+              <label>Import a saved public backup <span>Public evidence or DID-history JSON only—never choose identity.pem here.</span><input id="evidence-file" type="file" accept="application/json,.json" required></label>
+              <div class="history-import-actions">
+                <button class="secondary" type="submit">Add backup to this DID history</button>
+                <button id="export-history" class="secondary" type="button">Export DID history (.json)</button>
+                <button id="clear-history" class="text-button" type="button">Clear local history…</button>
+              </div>
             </form>
             <div id="did-history-list" class="feed-list" role="feed" aria-live="polite"><p class="feed-empty">Unlock your encrypted identity JSON or identity.pem to load its public history.</p></div>
             <p class="owned-records-note"><strong>Coverage:</strong> newly verified publications are saved as public evidence in this browser. The network scan can recover exact-DID matches only from Technocore’s currently retained 200-message window per room. Technocore is a rotating ring and has no all-time DID search, so older records require your public evidence backup.</p>
@@ -302,6 +319,7 @@
               <button type="button" data-feed-filter="all" aria-pressed="true">All rooms</button>
               <button type="button" data-feed-filter="introduction" aria-pressed="false">Introductions · lobby</button>
               <button type="button" data-feed-filter="contribution" aria-pressed="false">Contributions · technocore</button>
+              <button type="button" data-feed-filter="mine" aria-pressed="false">My posts only</button>
             </div>
             <form id="room-picker-form" class="room-picker">
               <label for="room-picker-select">Include another room in the live feed</label>

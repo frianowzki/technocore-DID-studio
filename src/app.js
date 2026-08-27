@@ -16,12 +16,17 @@ import { buildContributionMessage, createEvidenceBackup, validateContribution } 
 import { buildIntroductionMessage, validateIntroduction } from './introduction.js';
 import { decryptIdentityPem } from './pem.js';
 import { mnemonicToSeed, seedToMnemonic } from './mnemonic.js';
+import { verifyFallbackResponse } from './fallback.js';
 import {
+  clearDidHistory,
+  createHistoryBackup,
   mergeDidHistory,
-  publicationsFromEvidence,
+  provenanceLabel,
   readDidHistory,
+  recordsFromHistoryBackup,
   writeDidHistory,
 } from './history.js';
+import { highestNonce, nextNonceFor, rememberNonce } from './nonce-store.js';
 
 const state = {
   seed: null,
@@ -106,22 +111,32 @@ function renderDidHistory() {
     head.append(identity, time);
     const body = feedElement('p', 'feed-message', record.text);
     const meta = feedElement('footer', 'feed-meta');
-    meta.append(feedElement('span', '', record.source === 'network' ? 'Currently retained by Technocore' : 'Saved public evidence'));
+    meta.append(feedElement('span', 'feed-provenance', provenanceLabel(record)));
+    if (record.origin && record.origin !== 'https://technocore.chat') {
+      let host = record.origin;
+      try { host = new URL(record.origin).host; } catch {}
+      meta.append(feedElement('span', 'feed-origin', `@ ${host}`));
+    }
+    if (record.seenAt && record.source !== 'network' && record.source !== 'verified') {
+      meta.append(feedElement('span', 'feed-seen', `seen ${relativeTime(record.seenAt)}`));
+    }
     if (record.nonce !== null) meta.append(feedElement('span', '', `nonce ${record.nonce}`));
     item.append(head, body, meta);
     list.append(item);
   }
 }
 
-function showDidHistoryTab() {
+function showDidHistoryTab({ focus = false } = {}) {
   const historyTab = document.querySelector('[data-history-tab="owned"]');
   if (!historyTab) return;
   for (const button of document.querySelectorAll('[data-history-tab]')) {
     button.setAttribute('aria-selected', String(button === historyTab));
+    button.tabIndex = button === historyTab ? 0 : -1;
   }
   for (const panel of document.querySelectorAll('[data-history-panel]')) {
     panel.hidden = panel.dataset.historyPanel !== 'owned';
   }
+  if (focus) historyTab.focus();
 }
 
 function recordVerifiedPublicationForDid(did, publication) {
@@ -224,6 +239,8 @@ function setIdentity(seed, did, backup = null, source = 'restored') {
   document.body.dataset.identity = 'ready';
   syncDidHistory();
   updateRecordBoard();
+  // Suggest a nonce that respects this DID's per-room high-water mark.
+  byId('nonce').value = nonceForRoom();
 }
 
 function downloadJson(data, filename) {
@@ -358,26 +375,42 @@ byId('switch-identity').addEventListener('click', () => {
   byId('create').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
-byId('nonce').value = nextNonce();
-byId('refresh-nonce').addEventListener('click', () => { byId('nonce').value = nextNonce(); });
+// Per-DID + room nonce that is always strictly greater than the last one this
+// browser used for that key. Falls back to the clock before an identity loads.
+function nonceForRoom(room = byId('room')?.value || 'lobby') {
+  if (!state.did) return nextNonce();
+  return nextNonceFor(state.did, room);
+}
+
+byId('nonce').value = nonceForRoom();
+byId('refresh-nonce').addEventListener('click', () => { byId('nonce').value = nonceForRoom(); });
+// Re-suggest a valid nonce whenever the target room changes.
+byId('room').addEventListener('change', () => { byId('nonce').value = nonceForRoom(); });
 
 function hideMnemonic() {
   byId('mnemonic-words').replaceChildren();
   byId('mnemonic-words').hidden = true;
   byId('mnemonic-actions').hidden = true;
   byId('reveal-mnemonic').hidden = false;
+  const verifyForm = byId('mnemonic-verify-form');
+  verifyForm.hidden = true;
+  byId('mnemonic-verify-fields').replaceChildren();
+  revealedMnemonic = null;
 }
+
+let revealedMnemonic = null;
 
 byId('reveal-mnemonic').addEventListener('click', async () => {
   if (!state.seed) return announce('Unlock an identity first.', 'error');
   try {
-    const words = (await seedToMnemonic(state.seed)).split(' ');
+    revealedMnemonic = (await seedToMnemonic(state.seed)).split(' ');
     const list = byId('mnemonic-words');
     list.replaceChildren();
-    for (const word of words) list.append(feedElement('li', 'mnemonic-word', word));
+    for (const word of revealedMnemonic) list.append(feedElement('li', 'mnemonic-word', word));
     list.hidden = false;
     byId('mnemonic-actions').hidden = false;
     byId('reveal-mnemonic').hidden = true;
+    byId('mnemonic-words').focus?.();
     announce('Recovery phrase shown. Write it down offline; anyone with these 24 words controls this DID.', 'info');
   } catch (error) {
     announce(error.message, 'error');
@@ -388,6 +421,46 @@ byId('copy-mnemonic').addEventListener('click', async () => {
   const words = [...byId('mnemonic-words').querySelectorAll('li')].map((item) => item.textContent).join(' ');
   if (!words) return;
   await copy(words, 'Recovery phrase');
+});
+
+// Verify-phrase step: ask for 3 random words so the user proves they copied
+// the phrase down correctly before trusting it as a sole backup.
+byId('verify-mnemonic').addEventListener('click', () => {
+  if (!revealedMnemonic) return;
+  const indices = [];
+  while (indices.length < 3) {
+    const candidate = Math.floor(Math.random() * revealedMnemonic.length);
+    if (!indices.includes(candidate)) indices.push(candidate);
+  }
+  indices.sort((a, b) => a - b);
+  const fields = byId('mnemonic-verify-fields');
+  fields.replaceChildren();
+  for (const index of indices) {
+    const label = feedElement('label', 'mnemonic-verify-field', `Word #${index + 1}`);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.dataset.wordIndex = String(index);
+    input.setAttribute('aria-label', `Recovery word number ${index + 1}`);
+    label.append(input);
+    fields.append(label);
+  }
+  byId('mnemonic-verify-form').hidden = false;
+  fields.querySelector('input')?.focus();
+});
+
+byId('check-mnemonic').addEventListener('click', () => {
+  if (!revealedMnemonic) return;
+  const inputs = [...byId('mnemonic-verify-fields').querySelectorAll('input')];
+  const allCorrect = inputs.length > 0 && inputs.every((input) => input.value.trim().toLowerCase() === revealedMnemonic[Number(input.dataset.wordIndex)]);
+  if (allCorrect) {
+    byId('mnemonic-verify-form').hidden = true;
+    byId('mnemonic-verify-fields').replaceChildren();
+    announce('Recovery phrase verified. You transcribed it correctly.', 'success');
+  } else {
+    announce('Those words do not match. Check your written copy against the list above and try again.', 'error');
+  }
 });
 
 byId('mnemonic-restore-form').addEventListener('submit', async (event) => {
@@ -494,11 +567,13 @@ byId('sign-form').addEventListener('submit', async (event) => {
         return;
       }
       renderPublication(publication);
-      byId('nonce').value = nextNonce();
+      rememberNonce(didAtSign, publication.room, publication.nonce);
+      byId('nonce').value = nonceForRoom();
       announce(`Published and verified in ${publication.room} as sequence ${publication.seq}. Saved to your DID history — the live feed scrolls fast, so a fresh post is often already buried there.`, 'success');
     } catch (error) {
       const nonceReuse = error.message.match(/nonce [0-9]+ is not greater than ([0-9]+)/u);
       if (nonceReuse) {
+        rememberNonce(state.did, byId('room').value, nonceReuse[1]);
         byId('nonce').value = nextNonceAfter(nonceReuse[1]);
         byId('publish-check').checked = false;
         byId('signed-result').hidden = true;
@@ -523,7 +598,25 @@ byId('open-request').addEventListener('click', () => {
   if (!state.signed) return;
   if (!confirm('This fallback URL publicly writes the signed message and displays the Technocore JSON response. Continue?')) return;
   window.open(state.signed.url, '_blank', 'noopener,noreferrer');
-  announce('Result URL opened in a new tab. Save the posted room, seq, ts, DID, nonce, and text from the JSON response.', 'info');
+  byId('fallback-capture').open = true;
+  announce('Result URL opened in a new tab. Copy the JSON response and paste it below to save this publication.', 'info');
+});
+
+byId('capture-fallback').addEventListener('click', () => {
+  if (!state.signed) return announce('Sign a message before saving a fallback publication.', 'error');
+  try {
+    const publication = verifyFallbackResponse(byId('fallback-json').value, state.signed, { room: byId('room').value, origin: byId('server').value });
+    const didAtCapture = state.did;
+    if (publication.did !== didAtCapture) throw new Error('That response belongs to a different DID than the active identity.');
+    renderPublication(publication);
+    rememberNonce(didAtCapture, publication.room, publication.nonce);
+    byId('fallback-json').value = '';
+    byId('fallback-capture').open = false;
+    byId('nonce').value = nonceForRoom();
+    announce(`Fallback publication saved: ${publication.room} sequence ${publication.seq}. It is now in your DID history.`, 'success');
+  } catch (error) {
+    announce(error.message || 'Could not verify that fallback response.', 'error');
+  }
 });
 byId('copy-evidence').addEventListener('click', () => {
   if (!state.publication) return;
@@ -536,7 +629,7 @@ byId('go-contribution').addEventListener('click', () => byId('contribution').scr
 
 function preparePublicMessage(room, message, announcement) {
   byId('room').value = room;
-  byId('nonce').value = nextNonce();
+  byId('nonce').value = nonceForRoom(room);
   byId('message').value = message;
   byId('publish-check').checked = false;
   byId('signed-result').hidden = true;
@@ -608,15 +701,24 @@ function feedElement(tag, className, text) {
 
 function renderFeed() {
   const list = byId('feed-list');
-  const messages = filterFeed(state.feedMessages, state.feedFilter);
+  const messages = filterFeed(state.feedMessages, state.feedFilter, state.did);
   list.replaceChildren();
   if (!messages.length) {
-    list.append(feedElement('p', 'feed-empty', `No ${state.feedFilter === 'all' ? 'activity' : `${state.feedFilter}s`} in the current window.`));
+    let emptyText;
+    if (state.feedFilter === 'mine') {
+      emptyText = state.did
+        ? 'None of your posts are in the current retained window. The live feed only keeps the newest entries per room; your DID history keeps them permanently.'
+        : 'Unlock your identity to filter the feed to your own posts.';
+    } else {
+      emptyText = `No ${state.feedFilter === 'all' ? 'activity' : `${state.feedFilter}s`} in the current window.`;
+    }
+    list.append(feedElement('p', 'feed-empty', emptyText));
     return;
   }
   for (const message of messages) {
     const item = feedElement('article', `feed-item feed-${message.kind}`);
     item.setAttribute('aria-label', `${message.kind} in ${message.room}, sequence ${message.seq}`);
+    if (state.did && message.from === state.did) item.classList.add('feed-item-mine');
     const head = feedElement('header', 'feed-item-head');
     const identity = feedElement('div', 'feed-item-identity');
     identity.append(feedElement('span', 'feed-kind', message.kind), feedElement('span', 'feed-sequence', `${message.room} #${message.seq}`));
@@ -668,30 +770,68 @@ async function loadFeed() {
   }
 }
 
-for (const button of document.querySelectorAll('[data-history-tab]')) {
-  button.addEventListener('click', () => {
-    document.querySelectorAll('[data-history-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === button)));
-    document.querySelectorAll('[data-history-panel]').forEach((panel) => { panel.hidden = panel.dataset.historyPanel !== button.dataset.historyTab; });
+const historyTabs = [...document.querySelectorAll('[data-history-tab]')];
+function selectHistoryTab(button, { focus = false } = {}) {
+  historyTabs.forEach((item) => {
+    const selected = item === button;
+    item.setAttribute('aria-selected', String(selected));
+    item.tabIndex = selected ? 0 : -1;
   });
+  document.querySelectorAll('[data-history-panel]').forEach((panel) => { panel.hidden = panel.dataset.historyPanel !== button.dataset.historyTab; });
+  if (focus) button.focus();
 }
+historyTabs.forEach((button, index) => {
+  button.tabIndex = button.getAttribute('aria-selected') === 'true' ? 0 : -1;
+  button.addEventListener('click', () => selectHistoryTab(button));
+  button.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    const offset = event.key === 'ArrowRight' ? 1 : -1;
+    const next = historyTabs[(index + offset + historyTabs.length) % historyTabs.length];
+    selectHistoryTab(next, { focus: true });
+  });
+});
 
 byId('evidence-import-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
-  if (!state.did) return announce('Unlock the identity that owns this evidence before importing it.', 'error');
+  if (!state.did) return announce('Unlock the identity that owns this backup before importing it.', 'error');
   const file = byId('evidence-file').files[0];
-  if (!file) return announce('Choose a public evidence JSON file.', 'error');
-  if (file.size > 1024 * 1024) return announce('Public evidence files must be 1 MB or smaller.', 'error');
+  if (!file) return announce('Choose a public evidence or DID-history JSON file.', 'error');
+  if (file.size > 1024 * 1024) return announce('Public backups must be 1 MB or smaller.', 'error');
   try {
-    const imported = publicationsFromEvidence(JSON.parse(await file.text()), state.did);
-    if (!imported.length) throw new Error('That evidence backup does not contain any published records.');
+    const text = await file.text();
+    if (/-----BEGIN|PRIVATE KEY|"seed"|"passphrase"/u.test(text)) {
+      throw new Error('That file looks like a private backup. Import public evidence or DID-history JSON only.');
+    }
+    const imported = recordsFromHistoryBackup(JSON.parse(text), state.did);
+    if (!imported.length) throw new Error('That backup does not contain any published records.');
     syncDidHistory(imported);
     updateRecordBoard();
     form.reset();
     announce(`Imported ${imported.length} public record${imported.length === 1 ? '' : 's'} for this DID.`, 'success');
   } catch (error) {
-    announce(error.message || 'Could not import that public evidence backup.', 'error');
+    announce(error.message || 'Could not import that public backup.', 'error');
   }
+});
+
+byId('export-history').addEventListener('click', () => {
+  if (!state.did) return announce('Unlock an identity before exporting its history.', 'error');
+  if (!state.history.length) return announce('There are no saved records to export yet.', 'error');
+  const backup = createHistoryBackup(state.did, state.history);
+  downloadJson(backup, `technocore-did-history-${state.did.slice(-8)}.json`);
+  announce(`Exported ${backup.records.length} public record${backup.records.length === 1 ? '' : 's'}. No seed, passphrase, or private key is included.`, 'success');
+});
+
+byId('clear-history').addEventListener('click', () => {
+  if (!state.did) return announce('Unlock an identity before clearing its history.', 'error');
+  if (!confirm(`Remove this browser's saved public history for ${state.did}? This cannot be undone. Export a backup first if you want to keep it. It does not touch anything already published on Technocore.`)) return;
+  clearDidHistory(state.did);
+  state.history = [];
+  state.records = { lobby: null, technocore: null };
+  renderDidHistory();
+  updateRecordBoard();
+  announce('Local public history cleared for this DID. Published records still exist on Technocore.', 'success');
 });
 
 for (const button of document.querySelectorAll('[data-feed-filter]')) {
@@ -753,7 +893,12 @@ async function loadRoomDirectory() {
     }
     for (const entry of data.rooms) {
       if (BASE_ROOM_SET.has(entry.room)) continue;
-      const option = feedElement('option', '', entry.topic ? `${entry.room} — ${entry.topic}` : entry.room);
+      const bits = [];
+      if (entry.topic) bits.push(entry.topic);
+      if (entry.atCapacity) bits.push('full — scrolls fast');
+      else if (typeof entry.idleSeconds === 'number' && entry.idleSeconds > 900) bits.push(`idle ${Math.round(entry.idleSeconds / 60)}m`);
+      const label = bits.length ? `${entry.room} — ${bits.join(' · ')}` : entry.room;
+      const option = feedElement('option', '', label);
       option.value = entry.room;
       select.append(option);
     }
