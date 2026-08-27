@@ -1,15 +1,20 @@
 import { spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const chrome = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const baseUrl = process.env.E2E_BASE_URL || 'http://localhost:4173';
+await mkdir('artifacts', { recursive: true });
 const profile = await mkdtemp(join(tmpdir(), 'technocore-e2e-'));
 const child = spawn(chrome, ['--headless=new', '--disable-gpu', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank']);
 let socketUrl;
-for await (const chunk of child.stderr) {
-  const match = chunk.toString().match(/DevTools listening on (ws:\/\/[^\s]+)/u);
-  if (match) { socketUrl = match[1]; break; }
+for (let attempt = 0; attempt < 100 && !socketUrl; attempt += 1) {
+  try {
+    const [port, browserPath] = (await readFile(join(profile, 'DevToolsActivePort'), 'utf8')).trim().split('\n').map((line) => line.trim());
+    if (/^[0-9]+$/u.test(port) && browserPath?.startsWith('/devtools/browser/')) socketUrl = `ws://127.0.0.1:${port}${browserPath}`;
+  } catch { /* Chrome has not written the endpoint yet. */ }
+  if (!socketUrl) await new Promise((resolve) => setTimeout(resolve, 50));
 }
 if (!socketUrl) throw new Error('Chrome did not expose a DevTools socket.');
 const ws = new WebSocket(socketUrl);
@@ -31,7 +36,7 @@ try {
   await call('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false }, sessionId);
   await call('Page.enable', {}, sessionId);
   await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] }, sessionId);
-  await call('Page.navigate', { url: 'http://localhost:4173' }, sessionId);
+  await call('Page.navigate', { url: baseUrl }, sessionId);
   await new Promise((resolve) => setTimeout(resolve, 1200));
   async function inspectHover(selector) {
     const { result: { value: center } } = await call('Runtime.evaluate', {
@@ -53,6 +58,19 @@ try {
   await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 100 }, sessionId);
   const expression = `(async () => {
     const set = (selector, value) => { const el = document.querySelector(selector); el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
+    const encryptedPem = atob('LS0tLS1CRUdJTiBFTkNSWVBURUQgUFJJVkFURSBLRVktLS0tLQpNSUdqTUY4R0NTcUdTSWIzRFFFRkRUQlNNREVHQ1NxR1NJYjNEUUVGRERBa0JCRGFCdTZxb0FLVjZnUmxDNTdmClFWc3JBZ0lJQURBTUJnZ3Foa2lHOXcwQ0NRVUFNQjBHQ1dDR1NBRmxBd1FCS2dRUXhITGFzdlBYVGR6UjVvZ3cKV2tobmxnUkE5N3RBSSsyWVVBVzM0TVZGNUNCTVc2WUNodU5hbUYvS1JxMklUd0lVcWdSRXNwQkdQeVRvY1g5Vgp0aTJDQTlYS1pzNTgwdmJzN1FFdTZyU05zc3pHR2c9PQotLS0tLUVORCBFTkNSWVBURUQgUFJJVkFURSBLRVktLS0tLQo=');
+    const pemTransfer = new DataTransfer();
+    pemTransfer.items.add(new File([encryptedPem], 'identity.pem', { type: 'application/x-pem-file' }));
+    document.querySelector('#backup-file').files = pemTransfer.files;
+    set('#restore-passphrase', 'correct horse battery staple');
+    document.querySelector('#restore-form').requestSubmit();
+    for (let attempt = 0; attempt < 50 && document.querySelector('#sign-fieldset').disabled; attempt += 1) await new Promise(resolve => setTimeout(resolve, 100));
+    const pemDid = document.querySelector('#did-value').textContent;
+    const pemRestoreStatus = document.querySelector('#status').textContent;
+    const pemIdentityStatus = document.querySelector('#pem-status').textContent;
+    const pemDownloadBackupDisabled = document.querySelector('#download-backup').disabled;
+    const pemStorage = Object.entries(localStorage).map(([key, value]) => key + value).join(' ');
+    document.querySelector('#switch-identity').click();
     let initialBackupBlob;
     let initialBackupName = '';
     const initialCreateObjectURL = URL.createObjectURL;
@@ -175,11 +193,36 @@ try {
     document.querySelector('#refresh-feed').click();
     await new Promise(resolve => setTimeout(resolve, 150));
     document.querySelector('[data-feed-filter="contribution"]').click();
+    const historyTab = document.querySelector('[data-history-tab="owned"]');
+    const networkTab = document.querySelector('[data-history-tab="network"]');
+    const historyDefaultSelected = historyTab.getAttribute('aria-selected') === 'true' && !document.querySelector('#did-history-panel').hidden && document.querySelector('#public-feed-panel').hidden;
+    const evidence = {
+      format: 'technocore-public-evidence',
+      version: 1,
+      did,
+      publications: {
+        lobby: { room: 'lobby', sequence: 7, timestamp: '2026-08-24T08:00:00Z', did, nonce: '1710000000000', text: 'older imported lobby chat' },
+      },
+    };
+    const evidenceTransfer = new DataTransfer();
+    evidenceTransfer.items.add(new File([JSON.stringify(evidence)], 'technocore-public-evidence.json', { type: 'application/json' }));
+    document.querySelector('#evidence-file').files = evidenceTransfer.files;
+    document.querySelector('#evidence-import-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const historyImportStatus = document.querySelector('#status').textContent;
+    const historyTotal = document.querySelector('#did-history-total').textContent;
+    const historyLobbyCount = document.querySelector('#did-history-lobby-count').textContent;
+    const historyContributionCount = document.querySelector('#did-history-contribution-count').textContent;
+    const historyText = document.querySelector('#did-history-list').textContent;
+    const storedHistory = localStorage.getItem('technocore-public-history:' + did) || '';
+    networkTab.click();
+    const networkTabSelected = networkTab.getAttribute('aria-selected') === 'true' && document.querySelector('#did-history-panel').hidden && !document.querySelector('#public-feed-panel').hidden;
+    historyTab.click();
     const ownedRecords = document.querySelector('#owned-records');
     const ownedRecordsSnapshot = {
       present: Boolean(ownedRecords),
       beforePublicFeed: Boolean(ownedRecords && ownedRecords.compareDocumentPosition(document.querySelector('.feed-shell')) & Node.DOCUMENT_POSITION_FOLLOWING),
-      did: document.querySelector('#owned-did')?.textContent ?? '',
+      did: document.querySelector('#did-history-did')?.textContent ?? '',
       introductionRoom: document.querySelector('#owned-introduction-room')?.textContent ?? '',
       introductionSequence: document.querySelector('#owned-introduction-seq')?.textContent ?? '',
       introductionNonce: document.querySelector('#owned-introduction-nonce')?.textContent ?? '',
@@ -196,6 +239,40 @@ try {
     document.querySelector('#download-evidence-backup-2').click();
     document.querySelector('#download-record-sheet-2').click();
     HTMLAnchorElement.prototype.click = originalAnchorClick;
+    const recordCountBeforeSwitch = document.querySelector('#record-count').textContent;
+    const contributionBeforeSwitch = document.querySelector('#record-contribution').textContent;
+    const technocoreRecordBeforeSwitch = document.querySelector('#record-technocore').textContent;
+    const backupLobbyBeforeSwitch = document.querySelector('#backup-lobby-seq').textContent;
+    const backupTechnocoreBeforeSwitch = document.querySelector('#backup-technocore-seq').textContent;
+    const publishedRoomBeforeSwitch = document.querySelector('#published-room').textContent;
+    const publishedSequenceBeforeSwitch = document.querySelector('#published-seq').textContent;
+    const publishedNonceBeforeSwitch = document.querySelector('#published-nonce').textContent;
+    const identityReadyBeforeSwitch = !document.querySelector('#identity-ready').hidden;
+    const signEnabledBeforeSwitch = !document.querySelector('#sign-fieldset').disabled;
+    const publicationVisibleBeforeSwitch = !document.querySelector('#publication-result').hidden;
+    const evidenceB = {
+      format: 'technocore-public-evidence',
+      version: 1,
+      did: 'did:key:z6MkehRgf7yJbgaGfYsdoAsKdBPE3dj2CYhowQdcjqSJgvVd',
+      publications: { lobby: { room: 'lobby', sequence: 5, timestamp: '2026-08-20T08:00:00Z', did: 'did:key:z6MkehRgf7yJbgaGfYsdoAsKdBPE3dj2CYhowQdcjqSJgvVd', nonce: '1700000000000', text: 'DID B only record' } },
+    };
+    const pemTransferB = new DataTransfer();
+    pemTransferB.items.add(new File([encryptedPem], 'identity.pem', { type: 'application/x-pem-file' }));
+    document.querySelector('#backup-file').files = pemTransferB.files;
+    set('#restore-passphrase', 'correct horse battery staple');
+    document.querySelector('#restore-form').requestSubmit();
+    for (let attempt = 0; attempt < 50 && document.querySelector('#did-value').textContent === did; attempt += 1) await new Promise(resolve => setTimeout(resolve, 100));
+    const switchLeakDid = document.querySelector('#did-history-did').textContent;
+    const switchLeakTotalBeforeImport = document.querySelector('#did-history-total').textContent;
+    const switchLeakText = document.querySelector('#did-history-list').textContent;
+    const switchLeakContributionRecord = document.querySelector('#record-contribution').textContent;
+    const evidenceTransferB = new DataTransfer();
+    evidenceTransferB.items.add(new File([JSON.stringify(evidenceB)], 'technocore-public-evidence.json', { type: 'application/json' }));
+    document.querySelector('#evidence-file').files = evidenceTransferB.files;
+    document.querySelector('#evidence-import-form').requestSubmit();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    const switchLeakBText = document.querySelector('#did-history-list').textContent;
+    document.querySelector('#switch-identity').click();
     const themeToggle = document.querySelector('#theme-toggle');
     const initialTheme = document.documentElement.dataset.theme ?? '';
     const lightPaper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
@@ -207,6 +284,16 @@ try {
     const githubBounds = document.querySelector('.github-link').getBoundingClientRect();
     return {
       did,
+      pemDid,
+      pemRestoreStatus,
+      pemIdentityStatus,
+      pemDownloadBackupDisabled,
+      pemStorage,
+      switchLeakDid,
+      switchLeakTotalBeforeImport,
+      switchLeakText,
+      switchLeakContributionRecord,
+      switchLeakBText,
       themeHoverStyles: ${JSON.stringify(themeHoverStyles)},
       githubHoverStyles: ${JSON.stringify(githubHoverStyles)},
       themeTogglePresent: Boolean(themeToggle),
@@ -222,9 +309,9 @@ try {
       initialBackupName,
       initialBackupFormat: initialBackupBlob ? JSON.parse(await initialBackupBlob.text()).format : '',
       initialRecordCount,
-      identityReady: !document.querySelector('#identity-ready').hidden,
+      identityReady: identityReadyBeforeSwitch,
       recoveryBadge: document.querySelector('.no-recovery').textContent,
-      signEnabled: !document.querySelector('#sign-fieldset').disabled,
+      signEnabled: signEnabledBeforeSwitch,
       seedBackupName,
       seedBackupFormat: seedBackupJson.format,
       seedBackupDid: seedBackupJson.did,
@@ -237,7 +324,7 @@ try {
       seedBackupEnabledAfterRestore,
       restoredSeedBackupDid,
       ...signedOnly,
-      publicationVisible: !document.querySelector('#publication-result').hidden,
+      publicationVisible: publicationVisibleBeforeSwitch,
       preparedIntroductionRoom,
       preparedIntroductionMessage,
       nonceAfterRejection,
@@ -255,20 +342,28 @@ try {
       preparedMessage,
       contributionPlaceholder: document.querySelector('#contribution-url').getAttribute('placeholder'),
       checklistPresent: Boolean(document.querySelector('.contribution-checks')),
-      recordCount: document.querySelector('#record-count').textContent,
-      contribution: document.querySelector('#record-contribution').textContent,
-      backupLobbySequence: document.querySelector('#backup-lobby-seq').textContent,
-      backupTechnocoreSequence: document.querySelector('#backup-technocore-seq').textContent,
+      recordCount: recordCountBeforeSwitch,
+      contribution: contributionBeforeSwitch,
+      backupLobbySequence: backupLobbyBeforeSwitch,
+      backupTechnocoreSequence: backupTechnocoreBeforeSwitch,
       downloads,
-      technocoreRecord: document.querySelector('#record-technocore').textContent,
-      publishedRoom: document.querySelector('#published-room').textContent,
-      publishedSequence: document.querySelector('#published-seq').textContent,
-      publishedNonce: document.querySelector('#published-nonce').textContent,
+      technocoreRecord: technocoreRecordBeforeSwitch,
+      publishedRoom: publishedRoomBeforeSwitch,
+      publishedSequence: publishedSequenceBeforeSwitch,
+      publishedNonce: publishedNonceBeforeSwitch,
       feedStatus: document.querySelector('#feed-status').textContent,
       feedItems: document.querySelectorAll('#feed-list .feed-item').length,
       feedText: document.querySelector('#feed-list').textContent,
       feedLinks: document.querySelectorAll('#feed-list a').length,
       contributionFilterPressed: document.querySelector('[data-feed-filter="contribution"]').getAttribute('aria-pressed'),
+      historyDefaultSelected,
+      networkTabSelected,
+      historyImportStatus,
+      historyTotal,
+      historyLobbyCount,
+      historyContributionCount,
+      historyText,
+      storedHistory,
       ownedRecordsSnapshot,
       workspaceMaxWidth: getComputedStyle(document.querySelector('.workspace')).maxWidth,
       firstRailLinkLeft: Math.round(document.querySelector('.rail a').getBoundingClientRect().left),
@@ -380,6 +475,9 @@ npm run serve`;
   const expectedHeroStatement = 'No wallet handshake. No account gate. No silent publish. Nothing goes public until you review it and say so. No airdrop bait. No borrowed trust. Just cryptography you control.';
   const expectedHeroStrongTexts = ['No middleman.', 'private seed', 'No wallet handshake. No account gate. No silent publish.', 'No airdrop bait. No borrowed trust. Just cryptography you control.'];
   const passed = value.did.startsWith('did:key:z6Mk') && value.initialRecordCount === '1 of 4' && value.identityReady && value.recoveryBadge === 'No server recovery' && value.signEnabled && value.seedBackupName.startsWith('technocore-seed-backup-') && value.seedBackupName.endsWith('.json') && value.seedBackupFormat === 'technocore-seed-backup' && value.seedBackupDid === value.did && value.seedBackupHasPlainSeedField === false && value.seedBackupContainsPassphrase === false && value.seedBackupNetworkRequests === 0 && value.seedBackupStatus === 'Encrypted seed-only backup downloaded. Store its separate passphrase somewhere else.' && value.seedBackupFormReset && value.seedBackupDisabledAfterLock && value.seedBackupEnabledAfterRestore && value.restoredSeedBackupDid === value.did && value.resultVisible && value.canonical === 'lobby|1720000000000|hello world' && value.signatureLength === 86 && value.requestStartsCorrectly && value.fallbackNoteBeforePublish === 'Fallback only: If automatic publishing is unavailable, open this result URL once. Do not open it after a successful publish; signed URLs are single-use.' && value.publicationVisible && value.preparedIntroductionRoom === 'lobby' && value.preparedIntroductionMessage === `Agent introduction by ${value.did}: I build small public tools.` && BigInt(value.nonceAfterRejection) > 1787723337906n && value.rejectedSignedResultHidden && value.rejectedStatus.includes('Nonce rejected as already used') && value.introductionFilterLabel === 'Introductions · lobby' && value.contributionFilterLabel === 'Contributions · technocore' && value.lobbyRecord === 'lobby #42' && value.fallbackDisabledAfterPublish && value.copyUrlDisabledAfterPublish && value.consumedRequestUrlCleared && value.publishedSignedState === 'Signed and published — URL consumed' && value.fallbackNoteAfterPublish === 'Published successfully. This signed URL has been consumed and cannot be opened or submitted again.' && value.preparedRoom === 'technocore' && value.preparedMessage.includes('Public contribution [code]: Code or tool') && value.preparedMessage.includes('@flop_labs') && value.preparedMessage.includes(value.did) && value.contributionPlaceholder === null && value.checklistPresent === false && value.recordCount === '4 of 4' && value.contribution === 'Code or tool: https://example.com/work' && value.backupLobbySequence === '42' && value.backupTechnocoreSequence === '84' && value.downloads.length === 2 && value.downloads[0].startsWith('technocore-public-evidence-') && value.downloads[0].endsWith('.json') && value.downloads[1].startsWith('technocore-record-sheet-') && value.downloads[1].endsWith('.txt') && value.technocoreRecord === 'technocore #84' && value.publishedRoom === 'technocore' && value.publishedSequence === '84' && value.publishedNonce === '1720000000002' && value.feedStatus === 'Live — 2 latest entries' && value.feedItems === 1 && value.feedText.includes('inert link text') && value.feedLinks === 0 && value.contributionFilterPressed === 'true' && value.ownedRecordsSnapshot.present && value.ownedRecordsSnapshot.beforePublicFeed && value.ownedRecordsSnapshot.did === value.did && value.ownedRecordsSnapshot.introductionRoom === 'lobby' && value.ownedRecordsSnapshot.introductionSequence === '42' && value.ownedRecordsSnapshot.introductionNonce === value.nonceAfterRejection && value.ownedRecordsSnapshot.introductionText === value.preparedIntroductionMessage && value.ownedRecordsSnapshot.contributionRoom === 'technocore' && value.ownedRecordsSnapshot.contributionSequence === '84' && value.ownedRecordsSnapshot.contributionNonce === '1720000000002' && value.ownedRecordsSnapshot.contributionText === value.preparedMessage && value.ownedRecordsSnapshot.publicFeedHeading === 'Public live feed' && value.workspaceMaxWidth === 'none' && value.firstRailLinkLeft <= 64 && value.scrollEffectsEnabled && value.activeRailHref === '#run' && value.visibleStepCount > 0 && value.windowsCommand === expectedWindowsCommand && value.macCommand === expectedPosixCommand && value.linuxCommand === expectedPosixCommand && value.completeGuideLinkPresent === false && value.topbarText === '' && value.brandPresent === false && value.eyebrowPresent === false && value.heroTitle === 'Your key. Your identity. No middleman.' && value.heroLede === expectedHeroLede && value.heroStatement === expectedHeroStatement && JSON.stringify(value.heroStrongTexts) === JSON.stringify(expectedHeroStrongTexts) && value.localBadgePresent === false && value.githubHref === 'https://github.com/frianowzki/technocore-DID-studio' && value.githubVisibleText === '' && value.githubHasLogo && value.githubLabel === 'View Frianowzki’s Technocore DID Studio on GitHub' && value.footerText === '© 2026 Frianowzki - Built for Technocore / Flop Labs';
+  const switchLeakPassed = value.switchLeakDid === 'did:key:z6MkehRgf7yJbgaGfYsdoAsKdBPE3dj2CYhowQdcjqSJgvVd' && value.switchLeakDid !== value.did && value.switchLeakTotalBeforeImport === '0' && !value.switchLeakText.includes(value.did) && value.switchLeakContributionRecord === '—' && value.switchLeakBText.includes('DID B only record') && !value.switchLeakBText.includes(value.did);
+  const pemPassed = value.pemDid === 'did:key:z6MkehRgf7yJbgaGfYsdoAsKdBPE3dj2CYhowQdcjqSJgvVd' && value.pemRestoreStatus === 'Encrypted identity.pem unlocked locally for this tab only.' && value.pemIdentityStatus === 'encrypted identity.pem unlocked locally' && value.pemDownloadBackupDisabled && !value.pemStorage.includes('correct horse battery staple') && !value.pemStorage.includes('ENCRYPTED PRIVATE KEY');
+  const historyPassed = value.historyDefaultSelected && value.networkTabSelected && value.historyImportStatus === 'Imported 1 public record for this DID.' && value.historyTotal === '3' && value.historyLobbyCount === '2' && value.historyContributionCount === '1' && value.historyText.includes('older imported lobby chat') && !value.storedHistory.includes('seed') && !value.storedHistory.includes('passphrase');
   const expectedContributionPrinciples = [
     'Build the missing piece Create the guide, tool, translation, or explanation you wish had existed when you arrived.',
     'Make it worth opening Choose one format and do it with care. Clarity beats recycled hype every time.',
@@ -393,11 +491,31 @@ npm run serve`;
   const transparentHover = (styles) => styles.backgroundColor === 'rgba(0, 0, 0, 0)' && styles.borderColor === 'rgba(0, 0, 0, 0)' && styles.outlineStyle === 'none';
   const shortcutHoverPassed = transparentHover(value.themeHoverStyles) && transparentHover(value.githubHoverStyles);
   console.log(JSON.stringify(value, null, 2));
-  if (!passed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed || !shortcutHoverPassed) process.exitCode = 1;
+  if (!passed || !switchLeakPassed || !pemPassed || !historyPassed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed || !shortcutHoverPassed) process.exitCode = 1;
 } finally {
-  ws.close();
+  try { await call('Browser.close'); } catch { /* Best-effort shutdown of this isolated profile. */ }
   const exited = new Promise((resolve) => child.once('exit', resolve));
-  child.kill();
-  await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 3000))]);
-  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))]);
+  ws.close();
+  if (child.exitCode === null) {
+    if (process.platform === 'win32' && child.pid) {
+      const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true });
+      await new Promise((resolve) => killer.once('exit', resolve));
+    } else {
+      child.kill('SIGTERM');
+    }
+  }
+  let removalError;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      await rm(profile, { recursive: true, force: true });
+      removalError = null;
+      break;
+    } catch (error) {
+      removalError = error;
+      if (!['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(error?.code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  if (removalError) throw removalError;
 }

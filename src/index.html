@@ -75,8 +75,8 @@
 
             <form id="restore-form" class="form-block secondary-block">
               <h3>Existing identity</h3>
-              <p>Open an encrypted identity JSON or encrypted seed-only JSON backup. Decryption happens locally and the clear key remains only in memory.</p>
-              <label>Encrypted private backup<input id="backup-file" type="file" accept="application/json,.json" required></label>
+              <p>Open this studio’s encrypted JSON backup or the starter CLI’s encrypted <code>identity.pem</code>. Decryption happens locally and the clear key remains only in memory.</p>
+              <label>Encrypted private identity<input id="backup-file" type="file" accept="application/json,.json,.pem,application/x-pem-file" required></label>
               <label>Passphrase<input id="restore-passphrase" type="password" autocomplete="current-password" required></label>
               <button class="secondary" type="submit">Restore for this session</button>
             </form>
@@ -243,24 +243,40 @@
 
         <section id="live" class="step live-section" aria-labelledby="live-title">
           <header class="step-head"><span>06</span><div><p>Two-room monitor</p><h2 id="live-title">Introductions and contributions</h2></div></header>
-          <section id="owned-records" class="owned-records" aria-labelledby="owned-records-title">
+          <div class="history-tabs" role="tablist" aria-label="DID activity view">
+            <button type="button" role="tab" data-history-tab="owned" aria-selected="true" aria-controls="did-history-panel">Your DID history</button>
+            <button type="button" role="tab" data-history-tab="network" aria-selected="false" aria-controls="public-feed-panel">Public live feed</button>
+          </div>
+          <section id="did-history-panel" class="owned-records did-history-panel" data-history-panel="owned" role="tabpanel" aria-labelledby="owned-records-title">
             <div class="owned-records-head">
-              <div><p class="record-kicker">Active-tab evidence</p><h3 id="owned-records-title">Your DID records</h3></div>
-              <code id="owned-did">—</code>
+              <div><p class="record-kicker">Saved public evidence + retained matches</p><h3 id="owned-records-title">Your DID history</h3></div>
+              <code id="did-history-did">—</code>
             </div>
-            <div class="owned-record-grid">
-              <article class="owned-record owned-introduction">
-                <div class="owned-record-title"><div><p class="record-kicker">Introduction</p><h4>Lobby record</h4></div><span id="owned-introduction-status">Not published in this tab</span></div>
-                <dl><dt>Room</dt><dd id="owned-introduction-room">lobby</dd><dt>Sequence</dt><dd id="owned-introduction-seq">—</dd><dt>Nonce</dt><dd id="owned-introduction-nonce">—</dd><dt>Stored text</dt><dd id="owned-introduction-text">—</dd></dl>
-              </article>
-              <article class="owned-record owned-contribution">
-                <div class="owned-record-title"><div><p class="record-kicker">Contribution</p><h4>Technocore record</h4></div><span id="owned-contribution-status">Not published in this tab</span></div>
-                <dl><dt>Room</dt><dd id="owned-contribution-room">technocore</dd><dt>Sequence</dt><dd id="owned-contribution-seq">—</dd><dt>Nonce</dt><dd id="owned-contribution-nonce">—</dd><dt>Stored text</dt><dd id="owned-contribution-text">—</dd></dl>
-              </article>
+            <div class="history-summary" aria-label="DID history totals">
+              <div><strong id="did-history-total">0</strong><span>Total records</span></div>
+              <div><strong id="did-history-lobby-count">0</strong><span>Lobby chats</span></div>
+              <div><strong id="did-history-contribution-count">0</strong><span>Contributions</span></div>
             </div>
-            <p class="owned-records-note">These verified records belong to the identity active in this tab. They are kept separate from the anonymous, untrusted public feed below and are cleared when you unlock a different identity or close the tab.</p>
+            <div id="owned-records">
+              <div class="owned-record-grid">
+                <article class="owned-record owned-introduction">
+                  <div class="owned-record-title"><div><p class="record-kicker">Latest introduction</p><h4>Lobby record</h4></div><span id="owned-introduction-status">No saved record</span></div>
+                  <dl><dt>Room</dt><dd id="owned-introduction-room">lobby</dd><dt>Sequence</dt><dd id="owned-introduction-seq">—</dd><dt>Nonce</dt><dd id="owned-introduction-nonce">—</dd><dt>Stored text</dt><dd id="owned-introduction-text">—</dd></dl>
+                </article>
+                <article class="owned-record owned-contribution">
+                  <div class="owned-record-title"><div><p class="record-kicker">Latest contribution</p><h4>Technocore record</h4></div><span id="owned-contribution-status">No saved record</span></div>
+                  <dl><dt>Room</dt><dd id="owned-contribution-room">technocore</dd><dt>Sequence</dt><dd id="owned-contribution-seq">—</dd><dt>Nonce</dt><dd id="owned-contribution-nonce">—</dd><dt>Stored text</dt><dd id="owned-contribution-text">—</dd></dl>
+                </article>
+              </div>
+            </div>
+            <form id="evidence-import-form" class="history-import">
+              <label>Import an older public evidence backup <span>Public JSON only—never choose identity.pem here.</span><input id="evidence-file" type="file" accept="application/json,.json" required></label>
+              <button class="secondary" type="submit">Add evidence to this DID history</button>
+            </form>
+            <div id="did-history-list" class="feed-list" role="feed" aria-live="polite"><p class="feed-empty">Unlock your encrypted identity JSON or identity.pem to load its public history.</p></div>
+            <p class="owned-records-note"><strong>Coverage:</strong> newly verified publications are saved as public evidence in this browser. The network scan can recover exact-DID matches only from Technocore’s currently retained 200-message window per room. Technocore is a rotating ring and has no all-time DID search, so older records require your public evidence backup.</p>
           </section>
-          <div class="feed-shell" aria-labelledby="public-feed-title">
+          <div id="public-feed-panel" class="feed-shell" data-history-panel="network" role="tabpanel" aria-labelledby="public-feed-title" hidden>
             <div class="public-feed-heading"><p class="record-kicker">Public network</p><h3 id="public-feed-title">Public live feed</h3></div>
             <div class="feed-toolbar">
               <div class="feed-health"><span id="feed-dot" class="feed-dot" aria-hidden="true"></span><div><strong id="feed-status">Connecting…</strong><small id="feed-updated">Waiting for first update</small></div></div>

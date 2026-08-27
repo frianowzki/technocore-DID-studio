@@ -14,6 +14,13 @@ import { formatRecordSheet, recordProgress } from './record-sheet.js';
 import { filterFeed, relativeTime, shortAuthor } from './feed.js';
 import { buildContributionMessage, createEvidenceBackup, validateContribution } from './contribution.js';
 import { buildIntroductionMessage, validateIntroduction } from './introduction.js';
+import { decryptIdentityPem } from './pem.js';
+import {
+  mergeDidHistory,
+  publicationsFromEvidence,
+  readDidHistory,
+  writeDidHistory,
+} from './history.js';
 
 const state = {
   seed: null,
@@ -25,6 +32,8 @@ const state = {
   introduction: null,
   contribution: null,
   records: { lobby: null, technocore: null },
+  history: [],
+  activation: 0,
   feedMessages: [],
   feedFilter: 'all',
   feedLoading: false,
@@ -42,10 +51,73 @@ function publicationLabel(record) {
 }
 
 function updateOwnedRecord(kind, record) {
-  byId(`owned-${kind}-status`).textContent = record ? `Published #${record.seq}` : 'Not published in this tab';
+  byId(`owned-${kind}-status`).textContent = record ? `Recorded #${record.seq}` : 'No saved record';
   byId(`owned-${kind}-seq`).textContent = record ? String(record.seq) : '—';
   byId(`owned-${kind}-nonce`).textContent = record?.nonce || '—';
   byId(`owned-${kind}-text`).textContent = record?.text || '—';
+}
+
+function renderDidHistory() {
+  const list = byId('did-history-list');
+  if (!list) return;
+  const lobbyCount = state.history.filter((item) => item.room === 'lobby').length;
+  const contributionCount = state.history.filter((item) => item.room === 'technocore').length;
+  byId('did-history-total').textContent = String(state.history.length);
+  byId('did-history-lobby-count').textContent = String(lobbyCount);
+  byId('did-history-contribution-count').textContent = String(contributionCount);
+  byId('did-history-did').textContent = state.did || '—';
+  list.replaceChildren();
+  if (!state.did) {
+    list.append(feedElement('p', 'feed-empty', 'Unlock your encrypted identity JSON or identity.pem to load its public history.'));
+    return;
+  }
+  if (!state.history.length) {
+    list.append(feedElement('p', 'feed-empty', 'No saved or currently retained records were found for this DID. Import a public evidence backup if you already have one.'));
+    return;
+  }
+  for (const record of state.history) {
+    const item = feedElement('article', `feed-item feed-${record.kind}`);
+    item.setAttribute('aria-label', `${record.kind} in ${record.room}, sequence ${record.seq}`);
+    const head = feedElement('header', 'feed-item-head');
+    const identity = feedElement('div', 'feed-item-identity');
+    identity.append(feedElement('span', 'feed-kind', record.kind), feedElement('span', 'feed-sequence', `${record.room} #${record.seq}`));
+    const time = feedElement('time', '', relativeTime(record.timestamp));
+    time.dateTime = record.timestamp;
+    head.append(identity, time);
+    const body = feedElement('p', 'feed-message', record.text);
+    const meta = feedElement('footer', 'feed-meta');
+    meta.append(feedElement('span', '', record.source === 'network' ? 'Currently retained by Technocore' : 'Saved public evidence'));
+    if (record.nonce !== null) meta.append(feedElement('span', '', `nonce ${record.nonce}`));
+    item.append(head, body, meta);
+    list.append(item);
+  }
+}
+
+function recordVerifiedPublicationForDid(did, publication) {
+  if (!did || publication?.did !== did) return;
+  const merged = mergeDidHistory({ did, existing: readDidHistory(did), publications: [publication] });
+  writeDidHistory(did, merged);
+  if (did === state.did) syncDidHistory();
+}
+
+function syncDidHistory(imported = []) {
+  if (!state.did) {
+    state.history = [];
+    renderDidHistory();
+    return;
+  }
+  state.history = mergeDidHistory({
+    did: state.did,
+    existing: [...readDidHistory(state.did), ...state.history],
+    feed: state.feedMessages,
+    publications: Object.values(state.records),
+    imported,
+  });
+  writeDidHistory(state.did, state.history);
+  for (const room of ['lobby', 'technocore']) {
+    if (!state.records[room]) state.records[room] = state.history.find((item) => item.room === room) || null;
+  }
+  renderDidHistory();
 }
 
 function updateRecordBoard() {
@@ -62,7 +134,7 @@ function updateRecordBoard() {
   byId('record-lobby').textContent = publicationLabel(state.records.lobby);
   byId('record-contribution').textContent = state.contribution ? `${state.contribution.formatLabel}: ${state.contribution.url}` : '—';
   byId('record-technocore').textContent = publicationLabel(state.records.technocore);
-  byId('owned-did').textContent = state.did || '—';
+  byId('did-history-did').textContent = state.did || '—';
   updateOwnedRecord('introduction', state.records.lobby);
   updateOwnedRecord('contribution', state.records.technocore);
   byId('backup-did').textContent = state.did || '—';
@@ -75,6 +147,9 @@ function updateRecordBoard() {
   } else if (state.identitySource === 'seed-restored') {
     byId('pem-status').textContent = 'not created here — encrypted seed-only JSON unlocked';
     byId('passphrase-status').textContent = 'entered — never displayed';
+  } else if (state.identitySource === 'pem-restored') {
+    byId('pem-status').textContent = 'encrypted identity.pem unlocked locally';
+    byId('passphrase-status').textContent = 'entered — never displayed';
   } else if (state.identitySource === 'restored') {
     byId('pem-status').textContent = 'not created here — JSON backup unlocked';
     byId('passphrase-status').textContent = 'entered — never displayed';
@@ -84,7 +159,23 @@ function updateRecordBoard() {
   }
 }
 
+function resetIdentityBoundState() {
+  state.signed = null;
+  state.publication = null;
+  state.introduction = null;
+  state.contribution = null;
+  state.records = { lobby: null, technocore: null };
+  state.history = [];
+  byId('signed-result').hidden = true;
+  byId('publication-result').hidden = true;
+  byId('publish-check').checked = false;
+  byId('introduction-form').reset();
+  byId('contribution-form').reset();
+}
+
 function setIdentity(seed, did, backup = null, source = 'restored') {
+  if (state.did !== did) resetIdentityBoundState();
+  state.activation += 1;
   state.seed = seed;
   state.did = did;
   state.backup = backup;
@@ -94,8 +185,10 @@ function setIdentity(seed, did, backup = null, source = 'restored') {
   byId('identity-ready').hidden = false;
   byId('sign-fieldset').disabled = false;
   byId('seed-backup-fieldset').disabled = false;
+  byId('download-backup').disabled = !backup;
   byId('current-did').value = did;
   document.body.dataset.identity = 'ready';
+  syncDidHistory();
   updateRecordBoard();
 }
 
@@ -153,13 +246,24 @@ byId('restore-form').addEventListener('submit', async (event) => {
   const file = byId('backup-file').files[0];
   if (!file) return announce('Choose an identity backup file.', 'error');
   try {
-    const backup = JSON.parse(await file.text());
-    const restored = await decryptPortableBackup(backup, byId('restore-passphrase').value);
-    const did = await createDid(restored.seed);
-    const source = restored.format === 'technocore-seed-backup' ? 'seed-restored' : 'restored';
-    setIdentity(restored.seed, did, backup, source);
+    const contents = await file.text();
+    const passphrase = byId('restore-passphrase').value;
+    let backup = null;
+    let seed;
+    let source;
+    if (contents.includes('-----BEGIN ENCRYPTED PRIVATE KEY-----')) {
+      seed = await decryptIdentityPem(contents, passphrase);
+      source = 'pem-restored';
+    } else {
+      backup = JSON.parse(contents);
+      const restored = await decryptPortableBackup(backup, passphrase);
+      seed = restored.seed;
+      source = restored.format === 'technocore-seed-backup' ? 'seed-restored' : 'restored';
+    }
+    const did = await createDid(seed);
+    setIdentity(seed, did, backup, source);
     byId('restore-form').reset();
-    announce('Identity restored in memory for this tab only.', 'success');
+    announce(source === 'pem-restored' ? 'Encrypted identity.pem unlocked locally for this tab only.' : 'Identity restored in memory for this tab only.', 'success');
     byId('identity').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     announce(error.message || 'Could not restore that backup.', 'error');
@@ -203,25 +307,19 @@ byId('switch-identity').addEventListener('click', () => {
   state.seed = null;
   state.did = null;
   state.backup = null;
-  state.signed = null;
-  state.publication = null;
   state.identitySource = null;
-  state.introduction = null;
-  state.contribution = null;
-  state.records = { lobby: null, technocore: null };
+  resetIdentityBoundState();
   byId('identity-empty').hidden = false;
   byId('identity-ready').hidden = true;
   byId('sign-fieldset').disabled = true;
   byId('seed-backup-fieldset').disabled = true;
+  byId('download-backup').disabled = true;
   byId('seed-backup-form').reset();
-  byId('signed-result').hidden = true;
-  byId('publication-result').hidden = true;
   byId('current-did').value = '';
-  byId('introduction-form').reset();
-  byId('contribution-form').reset();
   document.body.dataset.identity = 'locked';
+  renderDidHistory();
   updateRecordBoard();
-  announce('Identity removed from this tab. Choose a different encrypted backup to unlock.', 'success');
+  announce('Identity removed from this tab. Choose an encrypted JSON backup or identity.pem to unlock.', 'success');
   byId('create').scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
@@ -244,6 +342,7 @@ function renderPublication(publication) {
   byId('open-request').disabled = true;
   byId('fallback-note').textContent = 'Published successfully. This signed URL has been consumed and cannot be opened or submitted again.';
   state.signed = null;
+  syncDidHistory();
   updateRecordBoard();
   setTimeout(loadFeed, 500);
 }
@@ -277,6 +376,8 @@ byId('sign-form').addEventListener('submit', async (event) => {
   try {
     const room = byId('room').value;
     const baseUrl = byId('server').value;
+    const activationAtSign = state.activation;
+    const didAtSign = state.did;
     const signed = await signMessage(state.seed, room, byId('nonce').value, byId('message').value);
     signed.url = `${signedMessageUrl(baseUrl, room, signed.did, signed.signature, signed.nonce, signed.text)}?format=json`;
     state.signed = signed;
@@ -294,6 +395,11 @@ byId('sign-form').addEventListener('submit', async (event) => {
     }
     try {
       const publication = await publishSignedMessage(signed, room, baseUrl);
+      if (state.activation !== activationAtSign || state.did !== didAtSign) {
+        announce('Identity changed before this publication resolved. The verified record was kept only for the DID that signed it.', 'error');
+        if (publication.did === didAtSign) recordVerifiedPublicationForDid(didAtSign, publication);
+        return;
+      }
       renderPublication(publication);
       byId('nonce').value = nextNonce();
       announce(`Published and verified in ${publication.room} as sequence ${publication.seq}.`, 'success');
@@ -448,6 +554,8 @@ async function loadFeed() {
     if (!Array.isArray(data.messages) || typeof data.updatedAt !== 'string') throw new Error('invalid feed response');
     state.feedMessages = data.messages;
     renderFeed();
+    syncDidHistory();
+    updateRecordBoard();
     byId('feed-status').textContent = data.stale ? 'Cached — upstream unavailable' : `Live — ${data.messages.length} latest entries`;
     byId('feed-updated').textContent = `Updated ${relativeTime(data.updatedAt)}`;
     byId('feed-dot').classList.toggle('is-stale', Boolean(data.stale));
@@ -465,6 +573,32 @@ async function loadFeed() {
     byId('refresh-feed').disabled = false;
   }
 }
+
+for (const button of document.querySelectorAll('[data-history-tab]')) {
+  button.addEventListener('click', () => {
+    document.querySelectorAll('[data-history-tab]').forEach((item) => item.setAttribute('aria-selected', String(item === button)));
+    document.querySelectorAll('[data-history-panel]').forEach((panel) => { panel.hidden = panel.dataset.historyPanel !== button.dataset.historyTab; });
+  });
+}
+
+byId('evidence-import-form').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!state.did) return announce('Unlock the identity that owns this evidence before importing it.', 'error');
+  const file = byId('evidence-file').files[0];
+  if (!file) return announce('Choose a public evidence JSON file.', 'error');
+  if (file.size > 1024 * 1024) return announce('Public evidence files must be 1 MB or smaller.', 'error');
+  try {
+    const imported = publicationsFromEvidence(JSON.parse(await file.text()), state.did);
+    if (!imported.length) throw new Error('That evidence backup does not contain any published records.');
+    syncDidHistory(imported);
+    updateRecordBoard();
+    form.reset();
+    announce(`Imported ${imported.length} public record${imported.length === 1 ? '' : 's'} for this DID.`, 'success');
+  } catch (error) {
+    announce(error.message || 'Could not import that public evidence backup.', 'error');
+  }
+});
 
 for (const button of document.querySelectorAll('[data-feed-filter]')) {
   button.addEventListener('click', () => {
