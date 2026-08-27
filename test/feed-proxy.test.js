@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getLiveFeed } from '../scripts/feed-proxy.mjs';
+import { getLiveFeed, getRoomDirectory, parseExtraRooms } from '../scripts/feed-proxy.mjs';
 
 const roomData = {
   lobby: {
@@ -61,4 +61,37 @@ test('reports upstream HTTP failures', async () => {
     () => getLiveFeed({ fetchImpl: async () => new Response('busy', { status: 429 }) }),
     /HTTP 429/,
   );
+});
+
+test('parses, validates, dedupes, and caps extra room selections', () => {
+  assert.deepEqual(parseExtraRooms('kibble, mesh-delta ,kibble'), ['kibble', 'mesh-delta']);
+  assert.deepEqual(parseExtraRooms('lobby,technocore'), []); // base rooms are always included, never duplicated
+  assert.deepEqual(parseExtraRooms('a,b,c,d,e,f,g,h'), ['a', 'b', 'c', 'd', 'e', 'f']); // capped at 6
+  assert.throws(() => parseExtraRooms('Bad Room!'), /not a valid Technocore room name/);
+});
+
+test('fetches base rooms plus requested extra rooms with neutral kind', async () => {
+  const requested = [];
+  const fetchImpl = async (url) => {
+    const room = new URL(url).pathname.split('/').at(-1);
+    requested.push(room);
+    return new Response(JSON.stringify({ room, count: 1, messages: [{ seq: 1, ts: '2026-08-25T09:00:00Z', from: 'did:key:z6Mk', text: `hi from ${room}`, nonce: 1 }] }), { status: 200 });
+  };
+  const feed = await getLiveFeed({ fetchImpl, extraRooms: 'kibble', now: () => new Date('2026-08-25T09:02:00Z') });
+  assert.deepEqual(requested.sort(), ['kibble', 'lobby', 'technocore']);
+  assert.deepEqual(feed.rooms, ['lobby', 'technocore', 'kibble']);
+  assert.equal(feed.messages.find((m) => m.room === 'kibble').kind, 'message');
+});
+
+test('discovers and ranks rooms from the directory, bounding topic length', async () => {
+  const fetchImpl = async () => new Response(JSON.stringify({ rooms: [
+    { room: 'lobby', last_seq: 10, topic: 'x'.repeat(300) },
+    { room: 'kibble', last_seq: 99, topic: 'jobs' },
+    { room: 'BAD ROOM', last_seq: 5 },
+    { room: 'nolast' },
+  ] }), { status: 200 });
+  const directory = await getRoomDirectory({ fetchImpl, now: () => new Date('2026-08-25T09:02:00Z') });
+  assert.deepEqual(directory.rooms.map((r) => r.room), ['kibble', 'lobby']);
+  assert.equal(directory.rooms.find((r) => r.room === 'lobby').base, true);
+  assert.equal(directory.rooms.find((r) => r.room === 'lobby').topic.length, 120);
 });

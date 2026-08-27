@@ -1,6 +1,12 @@
 const STORAGE_PREFIX = 'technocore-public-history:';
 const MAX_HISTORY_RECORDS = 1000;
-const ROOMS = new Set(['lobby', 'technocore']);
+const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,47}$/;
+
+function kindForRoom(room) {
+  if (room === 'lobby') return 'introduction';
+  if (room === 'technocore') return 'contribution';
+  return 'message';
+}
 
 function recordDid(record) {
   return record?.did ?? record?.from;
@@ -12,14 +18,14 @@ function normalizeRecord(record, expectedDid, source = 'saved') {
   const room = record?.room;
   const seq = record?.seq ?? record?.sequence;
   const timestamp = record?.timestamp ?? record?.ts;
-  if (!ROOMS.has(room) || !Number.isInteger(seq) || seq <= 0 || typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp)) || typeof record?.text !== 'string') {
+  if (typeof room !== 'string' || !NAME_RE.test(room) || !Number.isInteger(seq) || seq <= 0 || typeof timestamp !== 'string' || !Number.isFinite(Date.parse(timestamp)) || typeof record?.text !== 'string') {
     throw new Error('History entry is malformed.');
   }
   const nonce = record.nonce === null || record.nonce === undefined ? null : String(record.nonce);
   if (nonce !== null && !/^[0-9]{1,19}$/u.test(nonce)) throw new Error('History entry is malformed.');
   return {
     room,
-    kind: room === 'lobby' ? 'introduction' : 'contribution',
+    kind: kindForRoom(room),
     seq,
     timestamp,
     did,

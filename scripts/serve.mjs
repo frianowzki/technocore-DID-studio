@@ -2,10 +2,11 @@ import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize } from 'node:path';
 import { proxyPublish } from './publish-proxy.mjs';
-import { getLiveFeed } from './feed-proxy.mjs';
+import { getLiveFeed, getRoomDirectory } from './feed-proxy.mjs';
 
 const root = join(process.cwd(), 'dist');
-let feedCache = null;
+const feedCache = new Map();
+let roomsCache = null;
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.map': 'application/json', '.md': 'text/markdown; charset=utf-8' };
 const securityHeaders = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self' https://technocore.chat; base-uri 'none'; frame-ancestors 'none'",
@@ -43,13 +44,28 @@ const server = createServer(async (request, response) => {
   }
   if (pathname === '/api/feed') {
     if (request.method !== 'GET') return json(response, 405, { error: 'Method not allowed.' });
-    if (feedCache && Date.now() - feedCache.fetchedAt < 8000) return json(response, 200, feedCache.data);
+    const extraRooms = new URL(request.url, 'http://localhost').searchParams.get('rooms') ?? '';
+    const cacheKey = extraRooms.split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean).sort().join(',');
+    const cached = feedCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < 8000) return json(response, 200, cached.data);
     try {
-      const data = await getLiveFeed();
-      feedCache = { fetchedAt: Date.now(), data };
+      const data = await getLiveFeed({ extraRooms });
+      feedCache.set(cacheKey, { fetchedAt: Date.now(), data });
       return json(response, 200, data);
     } catch (error) {
-      if (feedCache) return json(response, 200, { ...feedCache.data, stale: true });
+      if (cached) return json(response, 200, { ...cached.data, stale: true });
+      return json(response, 502, { error: error.message });
+    }
+  }
+  if (pathname === '/api/rooms') {
+    if (request.method !== 'GET') return json(response, 405, { error: 'Method not allowed.' });
+    if (roomsCache && Date.now() - roomsCache.fetchedAt < 30000) return json(response, 200, roomsCache.data);
+    try {
+      const data = await getRoomDirectory();
+      roomsCache = { fetchedAt: Date.now(), data };
+      return json(response, 200, data);
+    } catch (error) {
+      if (roomsCache) return json(response, 200, { ...roomsCache.data, stale: true });
       return json(response, 502, { error: error.message });
     }
   }

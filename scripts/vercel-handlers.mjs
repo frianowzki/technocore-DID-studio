@@ -20,16 +20,39 @@ function parseBody(body) {
 }
 
 export function createFeedHandler({ getFeed, now = Date.now } = {}) {
-  let feedCache = null;
+  const feedCache = new Map();
   return async function feedHandler(request, response) {
     if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed.' });
-    if (feedCache && now() - feedCache.fetchedAt < 8000) return sendJson(response, 200, feedCache.data);
+    let extraRooms = '';
     try {
-      const data = await getFeed();
-      feedCache = { fetchedAt: now(), data };
+      const requested = new URL(request.url, 'http://localhost').searchParams.get('rooms') ?? '';
+      extraRooms = requested;
+    } catch { extraRooms = ''; }
+    const cacheKey = extraRooms.split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean).sort().join(',');
+    const cached = feedCache.get(cacheKey);
+    if (cached && now() - cached.fetchedAt < 8000) return sendJson(response, 200, cached.data);
+    try {
+      const data = await getFeed({ extraRooms });
+      feedCache.set(cacheKey, { fetchedAt: now(), data });
       return sendJson(response, 200, data);
     } catch (error) {
-      if (feedCache) return sendJson(response, 200, { ...feedCache.data, stale: true });
+      if (cached) return sendJson(response, 200, { ...cached.data, stale: true });
+      return sendJson(response, 502, { error: error.message });
+    }
+  };
+}
+
+export function createRoomsHandler({ getRooms, now = Date.now } = {}) {
+  let roomsCache = null;
+  return async function roomsHandler(request, response) {
+    if (request.method !== 'GET') return sendJson(response, 405, { error: 'Method not allowed.' });
+    if (roomsCache && now() - roomsCache.fetchedAt < 30000) return sendJson(response, 200, roomsCache.data);
+    try {
+      const data = await getRooms();
+      roomsCache = { fetchedAt: now(), data };
+      return sendJson(response, 200, data);
+    } catch (error) {
+      if (roomsCache) return sendJson(response, 200, { ...roomsCache.data, stale: true });
       return sendJson(response, 502, { error: error.message });
     }
   };

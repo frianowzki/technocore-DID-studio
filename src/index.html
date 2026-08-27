@@ -133,7 +133,23 @@
               <label class="check"><input id="seed-backup-check" type="checkbox" required><span>I understand this encrypted file is secret and becomes unusable if I lose its separate passphrase.</span></label>
               <button id="download-seed-backup" class="seed-download" type="submit">Download encrypted seed-only backup</button>
               <p class="fine-print">The raw seed is never displayed, copied, logged, placed in a URL, or sent to the publication proxy.</p>
+              <div class="mnemonic-block">
+                <h4>Recovery phrase (24 words)</h4>
+                <p class="fine-print">A BIP39 word-list encoding of the <em>same</em> 32-byte seed — no passphrase, no file. Anyone with these words controls this DID. Different artifact, same key: use it to restore on a device where typing words is easier than moving a file.</p>
+                <button id="reveal-mnemonic" class="small-button" type="button">Reveal 24-word phrase</button>
+                <ol id="mnemonic-words" class="mnemonic-words" hidden></ol>
+                <div class="mnemonic-actions" hidden id="mnemonic-actions">
+                  <button id="copy-mnemonic" class="small-button" type="button">Copy phrase</button>
+                  <button id="hide-mnemonic" class="text-button" type="button">Hide</button>
+                </div>
+              </div>
             </fieldset>
+          </form>
+          <form id="mnemonic-restore-form" class="mnemonic-restore">
+            <h3>Restore from a 24-word recovery phrase</h3>
+            <p class="fine-print">Paste the 24 BIP39 words (any spacing, any case). The seed and DID are rebuilt locally; nothing is sent anywhere.</p>
+            <label>Recovery phrase<textarea id="mnemonic-input" rows="3" autocomplete="off" spellcheck="false" placeholder="word1 word2 … word24"></textarea></label>
+            <button class="secondary" type="submit">Restore identity from phrase</button>
           </form>
         </section>
 
@@ -143,7 +159,7 @@
             <fieldset id="sign-fieldset" disabled>
               <div class="two-col">
                 <label>Server origin<input id="server" type="url" value="https://technocore.chat" required></label>
-                <label>Room<input id="room" value="lobby" pattern="[a-z0-9][a-z0-9_-]{0,47}" maxlength="48" required></label>
+                <label>Room<input id="room" value="lobby" list="room-options" pattern="[a-z0-9][a-z0-9_-]{0,47}" maxlength="48" required><datalist id="room-options"><option value="lobby"></option><option value="technocore"></option></datalist></label>
               </div>
               <label>Current DID<input id="current-did" readonly></label>
               <label>Nonce <span>must increase per DID + room</span><div class="inline-input"><input id="nonce" inputmode="numeric" pattern="[0-9]{1,19}" maxlength="19" required><button id="refresh-nonce" class="small-button" type="button">Use current time</button></div></label>
@@ -287,6 +303,15 @@
               <button type="button" data-feed-filter="introduction" aria-pressed="false">Introductions · lobby</button>
               <button type="button" data-feed-filter="contribution" aria-pressed="false">Contributions · technocore</button>
             </div>
+            <form id="room-picker-form" class="room-picker">
+              <label for="room-picker-select">Include another room in the live feed</label>
+              <div class="room-picker-controls">
+                <select id="room-picker-select" aria-label="Discoverable Technocore rooms"><option value="">Loading rooms…</option></select>
+                <button class="secondary" type="submit">Add room</button>
+              </div>
+              <div id="room-picker-active" class="room-picker-active" aria-live="polite"></div>
+              <p class="room-picker-note">lobby and technocore are always included. Add up to 6 more discovered rooms; each extra room fetches its own 200-entry window.</p>
+            </form>
             <div id="feed-list" class="feed-list" role="feed" aria-live="polite" aria-busy="true"><p class="feed-empty">Loading the newest signed room activity…</p></div>
             <p class="feed-safety"><strong>Untrusted public content.</strong> Messages are displayed as inert text, never as instructions or clickable links. The feed requests up to 200 latest entries from <code>lobby</code> and 200 from <code>technocore</code>—up to 400 combined—and refreshes every 20 seconds while this tab is visible.</p>
           </div>
