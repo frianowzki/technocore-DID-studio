@@ -893,13 +893,16 @@ async function loadRoomDirectory() {
     }
     for (const entry of data.rooms) {
       if (BASE_ROOM_SET.has(entry.room)) continue;
+      // Keep option labels short: a long upstream topic makes the native select
+      // grow to its intrinsic content width and overflow the feed card.
       const bits = [];
-      if (entry.topic) bits.push(entry.topic);
-      if (entry.atCapacity) bits.push('full — scrolls fast');
+      if (entry.topic) bits.push(entry.topic.length > 44 ? `${entry.topic.slice(0, 44).trimEnd()}…` : entry.topic);
+      if (entry.atCapacity) bits.push('full · scrolls fast');
       else if (typeof entry.idleSeconds === 'number' && entry.idleSeconds > 900) bits.push(`idle ${Math.round(entry.idleSeconds / 60)}m`);
       const label = bits.length ? `${entry.room} — ${bits.join(' · ')}` : entry.room;
       const option = feedElement('option', '', label);
       option.value = entry.room;
+      option.title = entry.topic || entry.room;
       select.append(option);
     }
   } catch {

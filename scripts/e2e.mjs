@@ -429,8 +429,38 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 150));
   const contributionBottomScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
   await writeFile('artifacts/contribution-bottom.png', Buffer.from(contributionBottomScreenshot.data, 'base64'));
-  await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('#live').scrollIntoView({block:'start'})" }, sessionId);
+  await call('Runtime.evaluate', { expression: "document.documentElement.style.scrollBehavior='auto'; document.querySelector('[data-history-tab=network]').click(); document.querySelector('#live').scrollIntoView({block:'start'})" }, sessionId);
   await new Promise((resolve) => setTimeout(resolve, 250));
+  const roomPickerGeometry = await call('Runtime.evaluate', {
+    expression: `(() => {
+      const select = document.querySelector('#room-picker-select');
+      const button = document.querySelector('#room-picker-form button[type="submit"]');
+      const card = document.querySelector('#public-feed-panel.feed-shell');
+      const stress = document.createElement('option');
+      stress.textContent = 'stress-room — ' + 'an intentionally oversized upstream room topic '.repeat(8);
+      stress.value = 'stress-room';
+      select.append(stress);
+      const selectRect = select.getBoundingClientRect();
+      const buttonRect = button.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      stress.remove();
+      return {
+        selectInsideCard: selectRect.left >= cardRect.left && selectRect.right <= cardRect.right + 1,
+        buttonInsideCard: buttonRect.left >= cardRect.left && buttonRect.right <= cardRect.right + 1,
+        buttonVisible: buttonRect.width > 0 && buttonRect.right <= document.documentElement.clientWidth,
+        noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        roomPickerMetrics: {
+          viewportWidth: document.documentElement.clientWidth,
+          scrollWidth: document.documentElement.scrollWidth,
+          select: { left: selectRect.left, right: selectRect.right, width: selectRect.width },
+          button: { left: buttonRect.left, right: buttonRect.right, width: buttonRect.width },
+          card: { left: cardRect.left, right: cardRect.right, width: cardRect.width },
+        },
+      };
+    })()`,
+    returnByValue: true,
+  }, sessionId);
+  Object.assign(value, roomPickerGeometry.result.value);
   const feedScreenshot = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId);
   await writeFile('artifacts/live-feed.png', Buffer.from(feedScreenshot.data, 'base64'));
   await call('Runtime.evaluate', { expression: "document.querySelector('#run').scrollIntoView({block:'start'}); document.querySelector('[data-os=windows]').click()" }, sessionId);
@@ -490,8 +520,9 @@ npm run serve`;
   const serveTypographyPassed = value.serveNoteFontSize === '14px' && value.serveNoteLineHeight === '23.1px' && value.serveNoteFontFamily === value.bodyFontFamily && value.serveLinkFontFamily === value.bodyFontFamily && value.serveCodeFontFamily === value.bodyFontFamily;
   const transparentHover = (styles) => styles.backgroundColor === 'rgba(0, 0, 0, 0)' && styles.borderColor === 'rgba(0, 0, 0, 0)' && styles.outlineStyle === 'none';
   const shortcutHoverPassed = transparentHover(value.themeHoverStyles) && transparentHover(value.githubHoverStyles);
+  const roomPickerLayoutPassed = value.selectInsideCard && value.buttonInsideCard && value.buttonVisible && value.noHorizontalOverflow;
   console.log(JSON.stringify(value, null, 2));
-  if (!passed || !switchLeakPassed || !pemPassed || !historyPassed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed || !shortcutHoverPassed) process.exitCode = 1;
+  if (!passed || !switchLeakPassed || !pemPassed || !historyPassed || !contentPassed || !downloadIsolationPassed || !themePassed || !serveTypographyPassed || !shortcutHoverPassed || !roomPickerLayoutPassed) process.exitCode = 1;
 } finally {
   try { await call('Browser.close'); } catch { /* Best-effort shutdown of this isolated profile. */ }
   const exited = new Promise((resolve) => child.once('exit', resolve));
